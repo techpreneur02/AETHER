@@ -1,0 +1,9 @@
+# AETHER-IT Safe Mode / FortiOS
+config system global
+    set hostname {{ hostname }}
+end
+config system interface
+    edit "vlan{{ vlan_id }}"
+        set ip {{ management_ip }} 255.255.255.0
+    next
+end

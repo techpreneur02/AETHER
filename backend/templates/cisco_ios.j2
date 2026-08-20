@@ -1,0 +1,5 @@
+! AETHER-IT Safe Mode / Cisco IOS
+hostname {{ hostname }}
+interface Vlan{{ vlan_id }}
+ ip address {{ management_ip }} 255.255.255.0
+ no shutdown

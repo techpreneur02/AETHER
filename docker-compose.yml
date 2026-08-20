@@ -1,0 +1,77 @@
+services:
+  api:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      AETHER_STORAGE: mongo
+      AETHER_SECRET_KEY: ${AETHER_SECRET_KEY:?Set AETHER_SECRET_KEY in .env}
+      AETHER_CORS_ORIGINS: ${AETHER_CORS_ORIGINS:-http://localhost:3000}
+      MONGODB_URL: mongodb://mongo:27017
+      MONGODB_DATABASE: aether_it
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    expose:
+      - "8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    expose:
+      - "3000"
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./deployment/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: aether_it
+    expose:
+      - "27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' localhost:27017/test | grep 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongo-backup:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGODB_DATABASE: aether_it
+    volumes:
+      - mongo_backups:/backups
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "find /backups -type f -mtime -2 | grep -q ."]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["set -eu; while true; do mongodump --host mongo:27017 --db \"$${MONGODB_DATABASE}\" --archive=\"/backups/aether-$$(date +%Y%m%d-%H%M%S).archive\" --gzip; find /backups -type f -mtime +7 -delete; sleep 86400; done"]
+
+volumes:
+  mongo_data:
+  mongo_backups:

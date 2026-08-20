@@ -1,0 +1,27 @@
+"use client";
+
+import { FormEvent, useEffect, useState } from "react";
+import { ArrowLeft, CheckCircle2, ListTodo, Plus, Sparkles, Trash2 } from "lucide-react";
+import { createTask, deleteTask, listProjects, listTasks, updateTask, type Project, type ProjectTask } from "../../lib/api";
+import "../globals.css";
+
+export default function TasksPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectId, setProjectId] = useState("");
+  const [tasks, setTasks] = useState<ProjectTask[]>([]);
+  const [title, setTitle] = useState("");
+  const [priority, setPriority] = useState<ProjectTask["priority"]>("medium");
+  const [assignee, setAssignee] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { const token = window.localStorage.getItem("aether_access_token"); if (token) listProjects(token).then((loaded) => { setProjects(loaded); setProjectId(loaded[0]?.id ?? ""); }); }, []);
+  useEffect(() => { const token = window.localStorage.getItem("aether_access_token"); if (token && projectId) listTasks(token, projectId).then(setTasks).catch(() => setTasks([])); }, [projectId]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const token = window.localStorage.getItem("aether_access_token"); if (!token || !projectId || !title.trim()) return; setSaving(true); setStatus(""); try { const task = await createTask(token, projectId, { title: title.trim(), priority, status: "open", assignee: assignee.trim(), due_date: dueDate }); setTasks((current) => [...current, task]); setTitle(""); setAssignee(""); setDueDate(""); setStatus("Task created"); } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to create task"); } finally { setSaving(false); } }
+  async function changeStatus(task: ProjectTask, nextStatus: ProjectTask["status"]) { const token = window.localStorage.getItem("aether_access_token"); if (!token || !projectId) return; try { const updated = await updateTask(token, projectId, task.id, { ...task, status: nextStatus }); setTasks((current) => current.map((item) => item.id === updated.id ? updated : item)); } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to update task"); } }
+  async function remove(taskId: string) { const token = window.localStorage.getItem("aether_access_token"); if (!token || !projectId) return; try { await deleteTask(token, projectId, taskId); setTasks((current) => current.filter((task) => task.id !== taskId)); setStatus("Task removed"); } catch (error) { setStatus(error instanceof Error ? error.message : "Unable to remove task"); } }
+
+  return <main className="imports-shell"><header className="floorplan-header"><a href="/"><ArrowLeft size={16} /> Console</a><div className="auth-brand"><div className="brand-mark"><Sparkles size={18} /></div><div><strong>AETHER-IT</strong><span>Project task queue</span></div></div><span className="floorplan-status"><span className="pulse" /> VPS CONNECTED</span></header><section className="imports-workspace"><span className="eyebrow">OPERATIONS / TASKS</span><h1>Turn findings into finished work.</h1><p>Track infrastructure follow-up by project, priority, owner, and due date.</p><section className="import-card panel"><label>Project<select value={projectId} onChange={(event) => setProjectId(event.target.value)}><option value="">Select a project</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></label><form className="task-form" onSubmit={submit}><input required value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Task title" /><select value={priority} onChange={(event) => setPriority(event.target.value as ProjectTask["priority"])}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select><input value={assignee} onChange={(event) => setAssignee(event.target.value)} placeholder="Assignee" /><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /><button disabled={saving || !projectId}><Plus size={14} /> {saving ? "Saving..." : "Add task"}</button></form>{status && <p className="upload-status success">{status}</p>}<div className="task-list">{tasks.map((task) => <div className={`task-row task-${task.status}`} key={task.id}><span className={`task-priority priority-${task.priority}`} /> <div><b>{task.title}</b><small>{task.priority.toUpperCase()} · {task.assignee || "Unassigned"}{task.due_date ? ` · due ${task.due_date}` : ""}</small></div><select value={task.status} onChange={(event) => changeStatus(task, event.target.value as ProjectTask["status"])}><option value="open">Open</option><option value="in_progress">In progress</option><option value="done">Done</option></select><button className="icon-action" title="Delete task" onClick={() => remove(task.id)}><Trash2 size={14} /></button></div>)}{!tasks.length && <div className="empty-allocations"><ListTodo size={20} /> No tasks in this project yet.</div>}</div><div className="task-summary"><CheckCircle2 size={14} /> {tasks.filter((task) => task.status === "done").length} of {tasks.length} tasks complete</div></section></section><footer className="statusbar"><span><Sparkles size={12} /> AI ENGINE: Gemini 3 Flash</span><span>TASK QUEUE</span><span>VPS CONNECTED</span></footer></main>;
+}

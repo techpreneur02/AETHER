@@ -1,0 +1,15 @@
+fastapi
+networkx
+pydantic>=2
+pytest
+email-validator
+httpx
+passlib[bcrypt]
+bcrypt<4.1
+python-jose[cryptography]
+uvicorn[standard]
+pymongo
+python-multipart
+jinja2
+google-genai
+weasyprint
