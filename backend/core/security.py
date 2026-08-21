@@ -13,7 +13,12 @@ password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def signing_key() -> str:
-    return os.getenv("AETHER_SECRET_KEY", "local-development-only-change-before-deploy")
+    key = os.getenv("AETHER_SECRET_KEY")
+    if key:
+        return key
+    if os.getenv("AETHER_ENV", "development").lower() == "development":
+        return "local-development-only-change-before-deploy"
+    raise RuntimeError("AETHER_SECRET_KEY must be set for non-development deployments")
 
 
 def hash_password(password: str) -> str:

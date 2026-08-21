@@ -308,6 +308,7 @@ export default function Home() {
     projects.find((project) => project.id === activeProjectId)?.name ??
     projects[0]?.name ??
     "SkyRise Corporate HQ";
+  const displayedProjectName = activeProject || "No project selected";
   const allVisibleNodes = topology?.nodes.length
     ? topology.nodes.map((node, index) => ({
         id: node.id,
@@ -1388,7 +1389,7 @@ export default function Home() {
       </div>
       <footer className="statusbar">
         <span>
-          PROJECT: <b>SkyRise Corporate HQ</b>
+          PROJECT: <b>{displayedProjectName}</b>
         </span>
         <span>
           ENVIRONMENT: <b>Production</b>

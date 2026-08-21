@@ -5,9 +5,10 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
+      AETHER_ENV: ${AETHER_ENV:-production}
       AETHER_STORAGE: mongo
       AETHER_SECRET_KEY: ${AETHER_SECRET_KEY:?Set AETHER_SECRET_KEY in .env}
-      AETHER_CORS_ORIGINS: ${AETHER_CORS_ORIGINS:-http://localhost:3000}
+      AETHER_CORS_ORIGINS: ${AETHER_CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080,http://127.0.0.1:8080}
       MONGODB_URL: mongodb://mongo:27017
       MONGODB_DATABASE: aether_it
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

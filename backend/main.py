@@ -238,6 +238,12 @@ def create_link(project_id: str, payload: LinkCreate, user: StoredUser = Depends
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Both link endpoints must be project devices")
     if payload.source == payload.target:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A device cannot link to itself")
+    if any(
+        (link.source == payload.source and link.target == payload.target)
+        or (link.source == payload.target and link.target == payload.source)
+        for link in topology.links
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A connection already exists between these devices")
     topology.links.append(payload)
     store.save_topology(project_id, user.organization_id, topology)
     return topology
@@ -264,6 +270,12 @@ def update_link(project_id: str, source: str, target: str, payload: LinkCreate, 
     link = next((item for item in topology.links if item.source == source and item.target == target), None)
     if link is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
+    if any(
+        ((other.source == payload.source and other.target == payload.target) or (other.source == payload.target and other.target == payload.source))
+        and not (other.source == source and other.target == target)
+        for other in topology.links
+    ):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A connection already exists between these devices")
     link.medium = payload.medium
     link.source_port = payload.source_port
     link.target_port = payload.target_port

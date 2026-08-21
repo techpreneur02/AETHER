@@ -194,6 +194,46 @@ def test_link_crud_requires_project_devices() -> None:
     assert invalid.status_code == 422
 
 
+def test_link_update_persists_port_details() -> None:
+    token = register("link-edit@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Link edit twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Core switch", "kind": "device"}).json()
+    second = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Access switch", "kind": "device"}).json()
+
+    created = client.post(
+        f"/projects/{project['id']}/links",
+        headers=headers,
+        json={"source": first["id"], "target": second["id"], "medium": "ethernet", "source_port": "Gi1/0/1", "target_port": "Gi1/0/24"},
+    )
+    updated = client.patch(
+        f"/projects/{project['id']}/links/{first['id']}/{second['id']}",
+        headers=headers,
+        json={"source": first["id"], "target": second["id"], "medium": "fiber", "source_port": "Eth1/1", "target_port": "Eth1/2"},
+    )
+    loaded = client.get(f"/projects/{project['id']}/topology", headers=headers)
+
+    assert created.status_code == 201
+    assert updated.status_code == 200
+    assert updated.json()["links"][0]["medium"] == "fiber"
+    assert updated.json()["links"][0]["source_port"] == "Eth1/1"
+    assert loaded.json()["links"][0]["target_port"] == "Eth1/2"
+
+
+def test_link_creation_rejects_duplicate_connections() -> None:
+    token = register("link-duplicate@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Duplicate link twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Core switch", "kind": "device"}).json()
+    second = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Access switch", "kind": "device"}).json()
+
+    first_create = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": second["id"], "medium": "ethernet"})
+    reverse_duplicate = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": second["id"], "target": first["id"], "medium": "fiber"})
+
+    assert first_create.status_code == 201
+    assert reverse_duplicate.status_code == 409
+
+
 def test_ip_allocation_crud_is_scoped_and_rejects_duplicates() -> None:
     token = register("ipam@example.com")
     project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "IPAM Twin"}).json()

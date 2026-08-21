@@ -55,6 +55,8 @@ export default function InfrastructureAuditPage() {
   const [deviceKind, setDeviceKind] = useState<"device" | "site" | "service">("device");
   const [source, setSource] = useState("");
   const [target, setTarget] = useState("");
+  const [sourcePort, setSourcePort] = useState("");
+  const [targetPort, setTargetPort] = useState("");
   const [medium, setMedium] = useState<"fiber" | "ethernet" | "wireless">("ethernet");
   const [status, setStatus] = useState("");
 
@@ -114,7 +116,20 @@ export default function InfrastructureAuditPage() {
 
   async function addConnection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); const token = window.localStorage.getItem("aether_access_token"); if (!token || !projectId || !source || !target || source === target) return;
-    try { setTopology(await createLink(token, projectId, { source, target, medium })); setSource(""); setTarget(""); setStatus("Infrastructure connection recorded"); }
+    try {
+      setTopology(await createLink(token, projectId, {
+        source,
+        target,
+        medium,
+        source_port: sourcePort || undefined,
+        target_port: targetPort || undefined,
+      }));
+      setSource("");
+      setTarget("");
+      setSourcePort("");
+      setTargetPort("");
+      setStatus("Infrastructure connection recorded with port details");
+    }
     catch (error) { setStatus(error instanceof Error ? error.message : "Unable to record connection"); }
   }
 
@@ -234,6 +249,10 @@ export default function InfrastructureAuditPage() {
               <select value={source} onChange={(event) => setSource(event.target.value)}><option value="">Source asset</option>{topology.nodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select>
               <select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Target asset</option>{topology.nodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select>
               <select value={medium} onChange={(event) => setMedium(event.target.value as typeof medium)}><option value="ethernet">Ethernet</option><option value="fiber">Fiber</option><option value="wireless">Wireless</option></select>
+              <div className="audit-port-row">
+                <input value={sourcePort} onChange={(event) => setSourcePort(event.target.value)} placeholder="Source port" />
+                <input value={targetPort} onChange={(event) => setTargetPort(event.target.value)} placeholder="Target port" />
+              </div>
               <button disabled={!projectId || !source || !target}><Link2 size={13} /> Add connection</button>
             </form>
             <label className="audit-intake-card audit-import"><b>Import discovery</b><span><FileUp size={15} /> CSV or Nmap XML</span><input type="file" accept=".csv,.xml,text/csv,application/xml" onChange={(event) => importAuditFile(event, event.target.files?.[0]?.name.endsWith(".xml") ? "nmap" : "csv")} disabled={!projectId} /></label>
@@ -246,6 +265,21 @@ export default function InfrastructureAuditPage() {
             <button className="audit-run" onClick={runAudit} disabled={loading || !projectId}><FileSearch size={13} /> {loading ? "Running..." : "Run audit"}</button>
           </div>
           {lastRun && <p className="audit-run-status">Last audit run: {lastRun}</p>}
+          <div className="audit-port-summary">
+            <b>Connection details</b>
+            {topology.links.length ? (
+              <ul>
+                {topology.links.map((link, index) => (
+                  <li key={`${link.source}-${link.target}-${index}`}>
+                    {topology.nodes.find((node) => node.id === link.source)?.name ?? link.source} → {topology.nodes.find((node) => node.id === link.target)?.name ?? link.target} · {link.medium}
+                    {link.source_port || link.target_port ? ` · ${link.source_port || "?"} ↔ ${link.target_port || "?"}` : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No connections recorded yet.</p>
+            )}
+          </div>
           <div className="audit-grid">
             {checks.map((check) => (
               <div
