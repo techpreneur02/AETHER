@@ -204,7 +204,7 @@ function NodeGlyph({ type }: { type: string }) {
 export default function Home() {
   const [activeNav, setActiveNav] = useState("Topology");
   const [activeStage, setActiveStage] = useState("TOPOLOGY");
-  const [selectedNode, setSelectedNode] = useState("core");
+  const [selectedNode, setSelectedNode] = useState("");
   const [isLive, setIsLive] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectLoadError, setProjectLoadError] = useState(false);
@@ -299,7 +299,24 @@ export default function Home() {
     if (!token || !activeProjectId) return;
     setTopologyLoadError(false);
     getTopology(token, activeProjectId)
-      .then(setTopology)
+      .then((loadedTopology) => {
+        if (!loadedTopology.nodes.length) {
+          saveTopology(token, activeProjectId, fallbackTopology)
+            .then((seededTopology) => {
+              setTopology(seededTopology);
+              setSelectedNode((current) => current || seededTopology.nodes[0]?.id || "");
+              setControlMessage("Empty project seeded with demo topology");
+            })
+            .catch(() => {
+              setTopology(fallbackTopology);
+              setSelectedNode((current) => current || fallbackTopology.nodes[0]?.id || "");
+              setControlMessage("Demo topology restored");
+            });
+          return;
+        }
+        setTopology(loadedTopology);
+        setSelectedNode((current) => current || loadedTopology.nodes[0]?.id || "");
+      })
       .catch(() => setTopologyLoadError(true));
   }, [activeProjectId]);
 
