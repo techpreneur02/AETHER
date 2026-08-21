@@ -88,7 +88,18 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
     });
   }, [selectedNodeId, topology]);
 
-  const edges: Edge[] = topology.links.map((link, index) => ({ id: `edge-${index}`, source: link.source, target: link.target, label: `${link.medium}${link.source_port || link.target_port ? ` · ${link.source_port || "?"} ↔ ${link.target_port || "?"}` : ""}`, animated: link.medium === "wireless", style: { stroke: link.medium === "fiber" ? "#49c9df" : link.medium === "wireless" ? "#b27ef2" : "#8ba4b5", strokeWidth: 2 }, labelStyle: { fill: "#d9e6f2", fontSize: 10 }, }));
+  const edges: Edge[] = topology.links.map((link) => {
+    const stableId = `edge-${link.source}-${link.target}`;
+    return {
+      id: stableId,
+      source: link.source,
+      target: link.target,
+      label: `${link.medium}${link.source_port || link.target_port ? ` · ${link.source_port || "?"} ↔ ${link.target_port || "?"}` : ""}`,
+      animated: link.medium === "wireless",
+      style: { stroke: link.medium === "fiber" ? "#49c9df" : link.medium === "wireless" ? "#b27ef2" : "#8ba4b5", strokeWidth: 2 },
+      labelStyle: { fill: "#d9e6f2", fontSize: 10 },
+    };
+  });
 
   function handleNodeDragStop(_: MouseEvent | TouchEvent, node: Node) {
     const snapped = {

@@ -612,8 +612,12 @@ export default function Home() {
   }
 
   function selectTopologyEdge(edgeId: string) {
-    const index = Number(edgeId.replace("edge-", ""));
-    const link = topology?.links[index];
+    const endpointPair = edgeId.replace(/^edge-/, "");
+    const link = topology?.links.find((item) => {
+      const edgeKey = `${item.source}-${item.target}`;
+      const reverseKey = `${item.target}-${item.source}`;
+      return edgeKey === endpointPair || reverseKey === endpointPair;
+    });
     if (!link) return;
     setSelectedLink(link);
     setLinkSource(link.source);
