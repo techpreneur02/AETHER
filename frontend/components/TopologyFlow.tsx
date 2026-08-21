@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Background, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { useEffect, useRef, useState } from "react";
+import { Background, Controls, Handle, MiniMap, Position, ReactFlow, type Connection, type Edge, type Node, type NodeProps, type ReactFlowInstance } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { Topology } from "../lib/api";
 
-type TopologyFlowProps = { topology: Topology; selectedNodeId?: string; onNodeClick?: (nodeId: string) => void; onConnect?: (connection: Connection) => void; onNodeDragStop?: (node: Node) => void; onEdgeClick?: (edgeId: string) => void };
+type TopologyFlowProps = { topology: Topology; selectedNodeId?: string; onNodeClick?: (nodeId: string) => void; onConnect?: (connection: Connection) => void; onNodeDragStop?: (node: Node) => void; onEdgeClick?: (edgeId: string) => void; fitViewTrigger?: number };
 type DeviceNodeData = { label: string; vendor: string; model: string; portCount: number; kind: string; ports: string[]; category: string };
 
 function defaultPortLabels(portCount: number): string[] {
@@ -38,8 +38,15 @@ function DeviceNode({ data, selected }: NodeProps<Node<DeviceNodeData>>) {
 
 const nodeTypes = { device: DeviceNode };
 
-export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, onConnect, onNodeDragStop, onEdgeClick }: TopologyFlowProps) {
+export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, onConnect, onNodeDragStop, onEdgeClick, fitViewTrigger = 0 }: TopologyFlowProps) {
   const [flowNodes, setFlowNodes] = useState<Node<DeviceNodeData>[]>([]);
+  const reactFlowInstance = useRef<ReactFlowInstance<Node<DeviceNodeData>, Edge> | null>(null);
+
+  useEffect(() => {
+    if (fitViewTrigger > 0 && reactFlowInstance.current) {
+      reactFlowInstance.current.fitView({ padding: 0.22, duration: 200 });
+    }
+  }, [fitViewTrigger]);
 
   useEffect(() => {
     setFlowNodes((current) => {
@@ -124,5 +131,5 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
     if (flowNodes.find((item) => item.id === selectedNodeId)) onNodeDragStop?.({ ...flowNodes.find((item) => item.id === selectedNodeId)!, position: snapped });
   }
 
-  return <div className="flow-wrap" tabIndex={0} onKeyDown={handleKeyDown}><ReactFlow nodes={flowNodes} edges={edges} nodeTypes={nodeTypes} snapToGrid snapGrid={[20, 20]} nodesDraggable nodesConnectable fitView colorMode="dark" onNodeClick={(_, node) => onNodeClick?.(node.id)} onNodeDragStop={handleNodeDragStop} onEdgeClick={(_, edge) => onEdgeClick?.(edge.id)} onConnect={onConnect}><Background color="#29445a" gap={24} /><Controls /><MiniMap nodeColor="#49c9df" /></ReactFlow></div>;
+  return <div className="flow-wrap" tabIndex={0} onKeyDown={handleKeyDown}><ReactFlow<Node<DeviceNodeData>, Edge> nodes={flowNodes} edges={edges} nodeTypes={nodeTypes} snapToGrid snapGrid={[20, 20]} nodesDraggable nodesConnectable fitView colorMode="dark" onInit={(instance) => { reactFlowInstance.current = instance; }} onNodeClick={(_, node) => onNodeClick?.(node.id)} onNodeDragStop={handleNodeDragStop} onEdgeClick={(_, edge) => onEdgeClick?.(edge.id)} onConnect={onConnect}><Background color="#29445a" gap={24} /><Controls /><MiniMap nodeColor="#49c9df" /></ReactFlow></div>;
 }

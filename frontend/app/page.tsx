@@ -362,6 +362,7 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<"all" | "online">("all");
   const [siteFilter, setSiteFilter] = useState<"all" | "sites">("all");
   const [legendFilter, setLegendFilter] = useState("all");
+  const [viewRefreshToken, setViewRefreshToken] = useState(0);
 
   useEffect(() => {
     const token = window.localStorage.getItem("aether_access_token");
@@ -529,10 +530,22 @@ export default function Home() {
       const arrangedTopology = topology ? arrangeTopologyHierarchically(topology) : null;
       if (arrangedTopology) {
         setTopology(arrangedTopology);
+        const token = window.localStorage.getItem("aether_access_token");
+        if (token && activeProjectId) {
+          saveTopology(token, activeProjectId, arrangedTopology)
+            .then(() => {
+              setControlMessage("Auto-layout applied and saved");
+            })
+            .catch(() => {
+              setControlMessage("Auto-layout applied locally; save sync failed");
+            });
+        } else {
+          setControlMessage("Auto-layout applied and view reset");
+        }
       }
       setSelectedNode(visibleNodes[0]?.id ?? arrangedTopology?.nodes[0]?.id ?? "");
       setZoom(100);
-      setControlMessage("Auto-layout applied and view reset");
+      setViewRefreshToken((current) => current + 1);
       return;
     }
     if (label === "Canvas mode") {
@@ -568,6 +581,7 @@ export default function Home() {
 
   function resetView() {
     setZoom(100);
+    setViewRefreshToken((current) => current + 1);
     setControlMessage("Topology view reset");
   }
 
@@ -1373,6 +1387,7 @@ export default function Home() {
                     onConnect={connectTopologyNodes}
                     onNodeDragStop={persistNodePosition}
                     onEdgeClick={selectTopologyEdge}
+                    fitViewTrigger={viewRefreshToken}
                   />
                 </div>
                 <aside className="details panel">
