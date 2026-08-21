@@ -411,6 +411,12 @@ export default function Home() {
   const [detailVendor, setDetailVendor] = useState("");
   const [detailModel, setDetailModel] = useState("");
   const [detailPortCount, setDetailPortCount] = useState<number>(4);
+  const [deviceAssignTarget, setDeviceAssignTarget] = useState("");
+  const [deviceAssignMedium, setDeviceAssignMedium] = useState<
+    "fiber" | "ethernet" | "wireless"
+  >("ethernet");
+  const [deviceAssignSourcePort, setDeviceAssignSourcePort] = useState("");
+  const [deviceAssignTargetPort, setDeviceAssignTargetPort] = useState("");
   const [ipAllocations, setIpAllocations] = useState<IPAllocation[]>([]);
   const [aiQuery, setAiQuery] = useState("");
   const [aiResponse, setAiResponse] = useState<AIQueryResponse | null>(null);
@@ -581,6 +587,16 @@ export default function Home() {
   const availableDevicePorts = portCatalog.filter(
     (port) => !selectedDevicePorts.includes(port),
   );
+  const assignableNodes =
+    (topology?.nodes ?? []).filter((node) => node.id !== selectedNode);
+  const selectedDevicePortOptions = selectedDevice
+    ? Array.from(
+        {
+          length: Math.max(selectedDevice.port_count ?? 4, 4),
+        },
+        (_, index) => `Gi1/0/${index + 1}`,
+      )
+    : [];
   const allVisibleNodes = topology?.nodes.length
     ? topology.nodes.map((node, index) => ({
         id: node.id,
@@ -923,6 +939,33 @@ export default function Home() {
       setControlMessage("Link deleted");
     } catch (error) {
       setControlMessage(error instanceof Error ? error.message : "Unable to delete link");
+    }
+  }
+
+  async function assignDeviceToTarget() {
+    const token = window.localStorage.getItem("aether_access_token");
+    if (!token || !activeProjectId || !selectedNode || !deviceAssignTarget) {
+      setControlMessage("Choose a target device before assigning");
+      return;
+    }
+
+    try {
+      const nextTopology = await createLink(token, activeProjectId, {
+        source: selectedNode,
+        target: deviceAssignTarget,
+        medium: deviceAssignMedium,
+        source_port: deviceAssignSourcePort || selectedDevicePortOptions[0] || undefined,
+        target_port: deviceAssignTargetPort || "Port 1",
+      });
+      setTopology(nextTopology);
+      setDeviceAssignTarget("");
+      setDeviceAssignSourcePort("");
+      setDeviceAssignTargetPort("");
+      setControlMessage("Device assignment created");
+    } catch (error) {
+      setControlMessage(
+        error instanceof Error ? error.message : "Unable to assign device",
+      );
     }
   }
 
@@ -1647,6 +1690,30 @@ export default function Home() {
                           <input value={detailModel} onChange={(event) => setDetailModel(event.target.value)} placeholder="Model" />
                           <input type="number" min={4} max={96} value={detailPortCount} onChange={(event) => setDetailPortCount(Number(event.target.value) || 4)} placeholder="Port count" />
                           <button type="button" className="save-detail-button" onClick={saveSelectedDevice}>Save device</button>
+                        </div>
+                      )}
+                      {selectedDevice && (
+                        <div className="detail-message">
+                          <b>Connection assignment</b>
+                          <select value={deviceAssignTarget} onChange={(event) => setDeviceAssignTarget(event.target.value)}>
+                            <option value="">Attach to another node</option>
+                            {assignableNodes.map((node) => (
+                              <option key={node.id} value={node.id}>{node.name}</option>
+                            ))}
+                          </select>
+                          <select value={deviceAssignMedium} onChange={(event) => setDeviceAssignMedium(event.target.value as typeof deviceAssignMedium)}>
+                            <option value="ethernet">Ethernet</option>
+                            <option value="fiber">Fiber</option>
+                            <option value="wireless">Wireless</option>
+                          </select>
+                          <select value={deviceAssignSourcePort} onChange={(event) => setDeviceAssignSourcePort(event.target.value)}>
+                            <option value="">Selected device port</option>
+                            {selectedDevicePortOptions.map((port) => (
+                              <option key={port} value={port}>{port}</option>
+                            ))}
+                          </select>
+                          <input value={deviceAssignTargetPort} onChange={(event) => setDeviceAssignTargetPort(event.target.value)} placeholder="Target port" />
+                          <button type="button" onClick={assignDeviceToTarget}>Assign link</button>
                         </div>
                       )}
                       {selectedDevice && selectedDeviceIps.length > 0 && (
