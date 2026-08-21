@@ -183,6 +183,96 @@ const fallbackTopology: Topology = {
   ],
 };
 
+function arrangeTopologyHierarchically(topology: Topology): Topology {
+  const incomingMap = new Map<string, number>();
+  const outgoingMap = new Map<string, string[]>();
+
+  topology.nodes.forEach((node) => {
+    incomingMap.set(node.id, 0);
+    outgoingMap.set(node.id, []);
+  });
+
+  topology.links.forEach((link) => {
+    if (!outgoingMap.has(link.source)) {
+      outgoingMap.set(link.source, []);
+    }
+    if (!incomingMap.has(link.target)) {
+      incomingMap.set(link.target, 0);
+    }
+    outgoingMap.get(link.source)?.push(link.target);
+    incomingMap.set(link.target, (incomingMap.get(link.target) ?? 0) + 1);
+  });
+
+  const roots = [...topology.nodes]
+    .filter((node) => (incomingMap.get(node.id) ?? 0) === 0)
+    .sort((a, b) => {
+      const priorities = { internet: 0, gateway: 1, router: 2, switch: 3, controller: 4, service: 5, device: 6, site: 7 };
+      return (priorities[a.name.toLowerCase().includes("internet") ? "internet" : a.kind] ?? 99) - (priorities[b.name.toLowerCase().includes("internet") ? "internet" : b.kind] ?? 99);
+    })
+    .map((node) => node.id);
+
+  const depthMap = new Map<string, number>();
+  const queue = [...roots];
+
+  roots.forEach((rootId) => depthMap.set(rootId, 0));
+
+  while (queue.length) {
+    const currentId = queue.shift();
+    if (!currentId) continue;
+    const currentDepth = depthMap.get(currentId) ?? 0;
+    const neighbors = outgoingMap.get(currentId) ?? [];
+
+    neighbors.forEach((neighborId) => {
+      const nextDepth = (depthMap.get(neighborId) ?? Number.POSITIVE_INFINITY);
+      if (currentDepth + 1 < nextDepth) {
+        depthMap.set(neighborId, currentDepth + 1);
+        queue.push(neighborId);
+      }
+    });
+  }
+
+  const layerMap = new Map<number, string[]>();
+  topology.nodes.forEach((node) => {
+    const depth = depthMap.get(node.id) ?? 0;
+    const current = layerMap.get(depth) ?? [];
+    current.push(node.id);
+    layerMap.set(depth, current);
+  });
+
+  Array.from(layerMap.entries()).forEach(([depth, ids]) => {
+    layerMap.set(
+      depth,
+      ids.sort((a, b) => {
+        const nodeA = topology.nodes.find((node) => node.id === a);
+        const nodeB = topology.nodes.find((node) => node.id === b);
+        const labelA = nodeA?.name ?? a;
+        const labelB = nodeB?.name ?? b;
+        return labelA.localeCompare(labelB);
+      }),
+    );
+  });
+
+  const orderedLayers = [...layerMap.entries()].sort(([a], [b]) => a - b);
+  const positionedNodes = topology.nodes.map((node) => {
+    const depth = depthMap.get(node.id) ?? 0;
+    const layerIds = orderedLayers.find(([layerDepth]) => layerDepth === depth)?.[1] ?? [];
+    const layerIndex = layerIds.indexOf(node.id);
+    const x = 120 + (layerIndex + 1) * 220;
+    const y = 110 + depth * 170;
+
+    return {
+      ...node,
+      floorplan_x: Math.max(0, Math.min(1, x / 1000)),
+      floorplan_y: Math.max(0, Math.min(1, y / 700)),
+    };
+  });
+
+  return {
+    ...topology,
+    nodes: positionedNodes,
+  };
+}
+
 const legendItems: [LucideIcon, string][] = [
   [Router, "Router"],
   [Router, "Switch"],
@@ -228,6 +318,7 @@ export default function Home() {
   const [linkSourcePort, setLinkSourcePort] = useState("");
   const [linkTargetPort, setLinkTargetPort] = useState("");
   const [selectedLink, setSelectedLink] = useState<Topology["links"][number] | null>(null);
+  const [selectedLinkOrigin, setSelectedLinkOrigin] = useState<{ source: string; target: string } | null>(null);
   const [detailVendor, setDetailVendor] = useState("");
   const [detailModel, setDetailModel] = useState("");
   const [detailPortCount, setDetailPortCount] = useState<number>(4);
@@ -301,21 +392,28 @@ export default function Home() {
     getTopology(token, activeProjectId)
       .then((loadedTopology) => {
         if (!loadedTopology.nodes.length) {
-          saveTopology(token, activeProjectId, fallbackTopology)
-            .then((seededTopology) => {
-              setTopology(seededTopology);
-              setSelectedNode((current) => current || seededTopology.nodes[0]?.id || "");
+          const seededTopology = arrangeTopologyHierarchically(fallbackTopology);
+          saveTopology(token, activeProjectId, seededTopology)
+            .then((persistedTopology) => {
+              setTopology(persistedTopology);
+              setSelectedNode((current) => current || persistedTopology.nodes[0]?.id || "");
               setControlMessage("Empty project seeded with demo topology");
             })
             .catch(() => {
-              setTopology(fallbackTopology);
-              setSelectedNode((current) => current || fallbackTopology.nodes[0]?.id || "");
+              setTopology(seededTopology);
+              setSelectedNode((current) => current || seededTopology.nodes[0]?.id || "");
               setControlMessage("Demo topology restored");
             });
           return;
         }
-        setTopology(loadedTopology);
-        setSelectedNode((current) => current || loadedTopology.nodes[0]?.id || "");
+        const arrangedTopology =
+          loadedTopology.nodes.some(
+            (node) => node.floorplan_x == null || node.floorplan_y == null,
+          )
+            ? arrangeTopologyHierarchically(loadedTopology)
+            : loadedTopology;
+        setTopology(arrangedTopology);
+        setSelectedNode((current) => current || arrangedTopology.nodes[0]?.id || "");
       })
       .catch(() => setTopologyLoadError(true));
   }, [activeProjectId]);
@@ -428,7 +526,11 @@ export default function Home() {
 
   function acknowledgeControl(label: string) {
     if (label === "Auto-layout complete") {
-      setSelectedNode(visibleNodes[0]?.id ?? "");
+      const arrangedTopology = topology ? arrangeTopologyHierarchically(topology) : null;
+      if (arrangedTopology) {
+        setTopology(arrangedTopology);
+      }
+      setSelectedNode(visibleNodes[0]?.id ?? arrangedTopology?.nodes[0]?.id ?? "");
       setZoom(100);
       setControlMessage("Auto-layout applied and view reset");
       return;
@@ -611,6 +713,16 @@ export default function Home() {
     }
   }
 
+  useEffect(() => {
+    if (!selectedLink) return;
+    setSelectedLinkOrigin({ source: selectedLink.source, target: selectedLink.target });
+    setLinkSource(selectedLink.source);
+    setLinkTarget(selectedLink.target);
+    setLinkMedium(selectedLink.medium);
+    setLinkSourcePort(selectedLink.source_port ?? "");
+    setLinkTargetPort(selectedLink.target_port ?? "");
+  }, [selectedLink]);
+
   function selectTopologyEdge(edgeId: string) {
     const endpointPair = edgeId.replace(/^edge-/, "");
     const link = topology?.links.find((item) => {
@@ -620,6 +732,7 @@ export default function Home() {
     });
     if (!link) return;
     setSelectedLink(link);
+    setSelectedLinkOrigin({ source: link.source, target: link.target });
     setLinkSource(link.source);
     setLinkTarget(link.target);
     setLinkMedium(link.medium);
@@ -650,8 +763,10 @@ export default function Home() {
   async function saveSelectedLink() {
     const token = window.localStorage.getItem("aether_access_token");
     if (!token || !activeProjectId || !selectedLink) return;
+    const originalSource = selectedLinkOrigin?.source ?? selectedLink.source;
+    const originalTarget = selectedLinkOrigin?.target ?? selectedLink.target;
     try {
-      setTopology(await updateLink(token, activeProjectId, selectedLink.source, selectedLink.target, {
+      setTopology(await updateLink(token, activeProjectId, originalSource, originalTarget, {
         source: linkSource,
         target: linkTarget,
         medium: linkMedium,
@@ -659,6 +774,7 @@ export default function Home() {
         target_port: linkTargetPort || undefined,
       }));
       setSelectedLink(null);
+      setSelectedLinkOrigin(null);
       setLinkSource("");
       setLinkTarget("");
       setControlMessage("Connection details saved");
@@ -670,9 +786,12 @@ export default function Home() {
   async function removeSelectedLink() {
     const token = window.localStorage.getItem("aether_access_token");
     if (!token || !activeProjectId || !selectedLink) return;
+    const originalSource = selectedLinkOrigin?.source ?? selectedLink.source;
+    const originalTarget = selectedLinkOrigin?.target ?? selectedLink.target;
     try {
-      setTopology(await deleteLink(token, activeProjectId, selectedLink.source, selectedLink.target));
+      setTopology(await deleteLink(token, activeProjectId, originalSource, originalTarget));
       setSelectedLink(null);
+      setSelectedLinkOrigin(null);
       setControlMessage("Link deleted");
     } catch (error) {
       setControlMessage(error instanceof Error ? error.message : "Unable to delete link");
@@ -1123,6 +1242,7 @@ export default function Home() {
                   <button type="button" onClick={removeSelectedLink}>Delete connection</button>
                   <button type="button" onClick={() => {
                     setSelectedLink(null);
+                    setSelectedLinkOrigin(null);
                     setLinkSource("");
                     setLinkTarget("");
                   }}>Close</button>
