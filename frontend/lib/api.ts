@@ -156,7 +156,10 @@ export async function deleteDevice(token: string, projectId: string, deviceId: s
 
 export async function updateDevice(token: string, projectId: string, deviceId: string, payload: { name: string; kind: "device" | "site" | "service"; vendor?: string; model?: string; port_count?: number }) {
   const response = await fetch(`${API_URL}/projects/${projectId}/devices/${deviceId}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-  if (!response.ok) throw new Error("Unable to update device");
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? "Unable to update device");
+  }
   return response.json();
 }
 

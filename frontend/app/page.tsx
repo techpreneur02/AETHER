@@ -46,6 +46,7 @@ import {
   createLink,
   createProject,
   deleteLink,
+  updateDevice,
   updateLink,
   exportProjectJson,
   exportProjectPdf,
@@ -161,18 +162,24 @@ const nodes = [
 ];
 
 const fallbackTopology: Topology = {
-  nodes: nodes.map((node) => ({
-    id: node.id,
-    name: node.label,
-    kind: node.type === "server" ? "service" : "device",
-  })),
+  nodes: [
+    { id: "internet", name: "Internet", kind: "device", vendor: "Public", model: "Cloud", port_count: 1 },
+    { id: "controller", name: "Omada Controller", kind: "service", vendor: "Omada", model: "Controller", port_count: 4 },
+    { id: "gateway", name: "Omada VPN Gateway", kind: "device", vendor: "Omada", model: "Gateway", port_count: 8 },
+    { id: "switch", name: "Omada PoE Switch", kind: "device", vendor: "Omada", model: "Switch", port_count: 12 },
+    { id: "ap1", name: "Omada AP", kind: "device", vendor: "Omada", model: "Access Point", port_count: 1 },
+    { id: "ap2", name: "Omada AP", kind: "device", vendor: "Omada", model: "Access Point", port_count: 1 },
+    { id: "ap3", name: "Omada AP", kind: "device", vendor: "Omada", model: "Access Point", port_count: 1 },
+    { id: "ap4", name: "Omada AP", kind: "device", vendor: "Omada", model: "Access Point", port_count: 1 },
+  ],
   links: [
-    { source: "edge", target: "firewall", medium: "ethernet" },
-    { source: "firewall", target: "core", medium: "ethernet" },
-    { source: "core", target: "server", medium: "ethernet" },
-    { source: "core", target: "access1", medium: "fiber" },
-    { source: "core", target: "access2", medium: "fiber" },
-    { source: "core", target: "access3", medium: "fiber" },
+    { source: "internet", target: "gateway", medium: "ethernet", source_port: "WAN", target_port: "WAN" },
+    { source: "gateway", target: "switch", medium: "ethernet", source_port: "LAN1", target_port: "G1" },
+    { source: "controller", target: "switch", medium: "ethernet", source_port: "ETH1", target_port: "G2" },
+    { source: "switch", target: "ap1", medium: "fiber", source_port: "P1", target_port: "Port 1" },
+    { source: "switch", target: "ap2", medium: "fiber", source_port: "P2", target_port: "Port 1" },
+    { source: "switch", target: "ap3", medium: "fiber", source_port: "P3", target_port: "Port 1" },
+    { source: "switch", target: "ap4", medium: "fiber", source_port: "P4", target_port: "Port 1" },
   ],
 };
 
@@ -221,6 +228,9 @@ export default function Home() {
   const [linkSourcePort, setLinkSourcePort] = useState("");
   const [linkTargetPort, setLinkTargetPort] = useState("");
   const [selectedLink, setSelectedLink] = useState<Topology["links"][number] | null>(null);
+  const [detailVendor, setDetailVendor] = useState("");
+  const [detailModel, setDetailModel] = useState("");
+  const [detailPortCount, setDetailPortCount] = useState<number>(4);
   const [aiQuery, setAiQuery] = useState("");
   const [aiResponse, setAiResponse] = useState<AIQueryResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -294,6 +304,19 @@ export default function Home() {
   }, [activeProjectId]);
 
   useEffect(() => {
+    const device = topology?.nodes.find((node) => node.id === selectedNode);
+    if (!device) {
+      setDetailVendor("");
+      setDetailModel("");
+      setDetailPortCount(4);
+      return;
+    }
+    setDetailVendor(device.vendor ?? "");
+    setDetailModel(device.model ?? "");
+    setDetailPortCount(device.port_count ?? Math.max(selectedDevicePorts.length, 4));
+  }, [selectedNode, topology]);
+
+  useEffect(() => {
     function focusAI(event: KeyboardEvent) {
       if (event.key === "/" && document.activeElement?.tagName !== "INPUT") {
         event.preventDefault();
@@ -309,6 +332,25 @@ export default function Home() {
     projects[0]?.name ??
     "SkyRise Corporate HQ";
   const displayedProjectName = activeProject || "No project selected";
+  const selectedDevice = topology?.nodes.find((node) => node.id === selectedNode) ?? null;
+  const selectedDeviceLinks =
+    topology?.links.filter(
+      (link) => link.source === selectedNode || link.target === selectedNode,
+    ) ?? [];
+  const selectedDevicePorts = selectedDevice
+    ? Array.from(
+        new Set(
+          selectedDeviceLinks.flatMap((link) => [
+            link.source === selectedNode ? link.source_port : null,
+            link.target === selectedNode ? link.target_port : null,
+          ]),
+        ),
+      ).filter((port): port is string => Boolean(port))
+    : [];
+  const selectedPortInventory =
+    selectedDevicePorts.length > 0
+      ? selectedDevicePorts
+      : Array.from({ length: Math.max(selectedDevice?.port_count ?? 4, 4) }, (_, index) => `Gi1/0/${index + 1}`);
   const allVisibleNodes = topology?.nodes.length
     ? topology.nodes.map((node, index) => ({
         id: node.id,
@@ -560,6 +602,26 @@ export default function Home() {
     setLinkMedium(link.medium);
     setLinkSourcePort(link.source_port ?? "");
     setLinkTargetPort(link.target_port ?? "");
+  }
+
+  async function saveSelectedDevice() {
+    const token = window.localStorage.getItem("aether_access_token");
+    if (!token || !activeProjectId || !selectedNode) return;
+    const currentDevice = topology?.nodes.find((node) => node.id === selectedNode);
+    if (!currentDevice) return;
+    try {
+      const nextTopology = await updateDevice(token, activeProjectId, selectedNode, {
+        name: currentDevice.name,
+        kind: currentDevice.kind,
+        vendor: detailVendor || undefined,
+        model: detailModel || undefined,
+        port_count: detailPortCount,
+      });
+      setTopology(nextTopology);
+      setControlMessage("Device details saved");
+    } catch (error) {
+      setControlMessage(error instanceof Error ? error.message : "Unable to update device");
+    }
   }
 
   async function saveSelectedLink() {
@@ -1190,28 +1252,64 @@ export default function Home() {
                     ))}
                   </div>
                   {detailTab === "overview" && (
-                    <dl className="spec-list">
-                      <div>
-                        <dt>Project state</dt>
-                        <dd>{topology ? "API-backed" : "Demo seed"}</dd>
-                      </div>
-                      <div>
-                        <dt>Node count</dt>
-                        <dd>{visibleNodes.length}</dd>
-                      </div>
-                      <div>
-                        <dt>Graph links</dt>
-                        <dd>{topology?.links.length ?? 0}</dd>
-                      </div>
-                    </dl>
+                    <>
+                      <dl className="spec-list">
+                        <div>
+                          <dt>Device</dt>
+                          <dd>{selectedDevice?.name ?? "No device selected"}</dd>
+                        </div>
+                        <div>
+                          <dt>Kind</dt>
+                          <dd>{selectedDevice?.kind ?? "unknown"}</dd>
+                        </div>
+                        <div>
+                          <dt>Vendor</dt>
+                          <dd>{selectedDevice?.vendor ?? "Custom"}</dd>
+                        </div>
+                        <div>
+                          <dt>Model</dt>
+                          <dd>{selectedDevice?.model ?? "Not specified"}</dd>
+                        </div>
+                        <div>
+                          <dt>Ports</dt>
+                          <dd>{selectedDevice?.port_count ?? selectedPortInventory.length}</dd>
+                        </div>
+                        <div>
+                          <dt>Connections</dt>
+                          <dd>{selectedDeviceLinks.length}</dd>
+                        </div>
+                      </dl>
+                      {selectedDevice && (
+                        <div className="detail-message">
+                          <b>Edit device metadata</b>
+                          <input value={detailVendor} onChange={(event) => setDetailVendor(event.target.value)} placeholder="Vendor" />
+                          <input value={detailModel} onChange={(event) => setDetailModel(event.target.value)} placeholder="Model" />
+                          <input type="number" min={4} max={96} value={detailPortCount} onChange={(event) => setDetailPortCount(Number(event.target.value) || 4)} placeholder="Port count" />
+                          <button type="button" className="save-detail-button" onClick={saveSelectedDevice}>Save device</button>
+                        </div>
+                      )}
+                    </>
                   )}
                   {detailTab === "ports" && (
-                    <div className="detail-message">
-                      <b>Port inventory</b>
-                      <span>
-                        Port-level data will appear when imported from device
-                        discovery.
-                      </span>
+                    <div className="port-panel">
+                      <b>Connected ports</b>
+                      <div className="port-grid">
+                        {selectedPortInventory.map((port) => {
+                          const associatedLink = selectedDeviceLinks.find(
+                            (link) =>
+                              (link.source === selectedNode && link.source_port === port) ||
+                              (link.target === selectedNode && link.target_port === port),
+                          );
+                          return (
+                            <div key={port} className="port-chip">
+                              <span>{port}</span>
+                              <small>
+                                {associatedLink ? `${associatedLink.medium} link` : "Available"}
+                              </small>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                   {detailTab === "config" && (
