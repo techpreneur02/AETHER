@@ -43,8 +43,10 @@ import {
 } from "lucide-react";
 import {
   createDevice,
+  createIpAllocation,
   createLink,
   createProject,
+  createSecurityRule,
   deleteLink,
   updateDevice,
   updateLink,
@@ -184,6 +186,91 @@ const fallbackTopology: Topology = {
     { source: "switch", target: "ap4", medium: "fiber", source_port: "P4", target_port: "Port 1" },
   ],
 };
+
+const businessSetupTopology: Topology = {
+  nodes: [
+    { id: "internet", name: "Internet", kind: "device", vendor: "ISP", model: "Public Internet", port_count: 1, floorplan_x: 0.08, floorplan_y: 0.12 },
+    { id: "digicel-router", name: "Digicel Router", kind: "device", vendor: "Digicel", model: "Bridge", port_count: 4, floorplan_x: 0.2, floorplan_y: 0.18 },
+    { id: "er7206", name: "Omada Load Balancer", kind: "device", vendor: "TP-Link", model: "ER7206", port_count: 8, floorplan_x: 0.35, floorplan_y: 0.24 },
+    { id: "firewall", name: "Firewall Device", kind: "device", vendor: "Fortinet", model: "Firewall", port_count: 8, floorplan_x: 0.5, floorplan_y: 0.24 },
+    { id: "core-switch-1", name: "Core Switch 1", kind: "device", vendor: "TP-Link", model: "TL-SG3428X", port_count: 24, floorplan_x: 0.66, floorplan_y: 0.32 },
+    { id: "omada-controller", name: "Omada Controller", kind: "service", vendor: "TP-Link", model: "OC200", port_count: 4, floorplan_x: 0.68, floorplan_y: 0.12 },
+    { id: "switch-2", name: "Access Switch 2", kind: "device", vendor: "TP-Link", model: "TL-SG3428MP", port_count: 24, floorplan_x: 0.54, floorplan_y: 0.6 },
+    { id: "switch-3", name: "Access Switch 3", kind: "device", vendor: "TP-Link", model: "TL-SG3428", port_count: 24, floorplan_x: 0.8, floorplan_y: 0.6 },
+    { id: "ap-1", name: "AP 1", kind: "device", vendor: "TP-Link", model: "EAP660", port_count: 1, floorplan_x: 0.38, floorplan_y: 0.78 },
+    { id: "ap-2", name: "AP 2", kind: "device", vendor: "TP-Link", model: "EAP660", port_count: 1, floorplan_x: 0.56, floorplan_y: 0.82 },
+    { id: "ap-3", name: "AP 3", kind: "device", vendor: "TP-Link", model: "EAP660", port_count: 1, floorplan_x: 0.74, floorplan_y: 0.82 },
+    { id: "primary-server", name: "Primary Server", kind: "service", vendor: "HPE", model: "ProLiant", port_count: 4, floorplan_x: 0.9, floorplan_y: 0.48 },
+    { id: "printer-1", name: "Printer 1", kind: "device", vendor: "HP", model: "LaserJet", port_count: 1, floorplan_x: 0.9, floorplan_y: 0.7 },
+    { id: "printer-2", name: "Printer 2", kind: "device", vendor: "HP", model: "LaserJet", port_count: 1, floorplan_x: 0.92, floorplan_y: 0.78 },
+    { id: "printer-3", name: "Printer 3", kind: "device", vendor: "HP", model: "LaserJet", port_count: 1, floorplan_x: 0.84, floorplan_y: 0.82 },
+    { id: "printer-4", name: "Printer 4", kind: "device", vendor: "HP", model: "LaserJet", port_count: 1, floorplan_x: 0.96, floorplan_y: 0.72 },
+    { id: "dept-a-pc-1", name: "Dept A PC 1", kind: "device", vendor: "Dell", model: "Latitude", port_count: 1, floorplan_x: 0.12, floorplan_y: 0.6 },
+    { id: "dept-b-pc-1", name: "Dept B PC 1", kind: "device", vendor: "Dell", model: "Latitude", port_count: 1, floorplan_x: 0.2, floorplan_y: 0.72 },
+    { id: "dept-c-pc-1", name: "Dept C PC 1", kind: "device", vendor: "Dell", model: "Latitude", port_count: 1, floorplan_x: 0.28, floorplan_y: 0.84 },
+  ],
+  links: [
+    { source: "internet", target: "digicel-router", medium: "ethernet", source_port: "WAN", target_port: "WAN" },
+    { source: "digicel-router", target: "er7206", medium: "ethernet", source_port: "LAN1", target_port: "WAN" },
+    { source: "er7206", target: "firewall", medium: "ethernet", source_port: "LAN2", target_port: "WAN" },
+    { source: "firewall", target: "core-switch-1", medium: "ethernet", source_port: "LAN1", target_port: "1" },
+    { source: "core-switch-1", target: "omada-controller", medium: "ethernet", source_port: "2", target_port: "ETH1" },
+    { source: "core-switch-1", target: "switch-2", medium: "ethernet", source_port: "23", target_port: "1" },
+    { source: "core-switch-1", target: "switch-3", medium: "ethernet", source_port: "24", target_port: "1" },
+    { source: "switch-2", target: "ap-1", medium: "fiber", source_port: "2", target_port: "Port 1" },
+    { source: "switch-2", target: "ap-2", medium: "fiber", source_port: "3", target_port: "Port 1" },
+    { source: "switch-2", target: "ap-3", medium: "fiber", source_port: "4", target_port: "Port 1" },
+    { source: "switch-3", target: "primary-server", medium: "ethernet", source_port: "2", target_port: "1" },
+    { source: "switch-3", target: "printer-1", medium: "ethernet", source_port: "3", target_port: "1" },
+    { source: "switch-3", target: "printer-2", medium: "ethernet", source_port: "4", target_port: "1" },
+    { source: "switch-3", target: "printer-3", medium: "ethernet", source_port: "5", target_port: "1" },
+    { source: "switch-3", target: "printer-4", medium: "ethernet", source_port: "6", target_port: "1" },
+    { source: "switch-3", target: "dept-a-pc-1", medium: "ethernet", source_port: "7", target_port: "1" },
+    { source: "switch-3", target: "dept-b-pc-1", medium: "ethernet", source_port: "11", target_port: "1" },
+    { source: "switch-3", target: "dept-c-pc-1", medium: "ethernet", source_port: "15", target_port: "1" },
+  ],
+};
+
+const businessSubnetAllocations = [
+  { address: "192.168.10.1", subnet: "192.168.10.0/24", description: "Management gateway", device_id: "omada-controller" },
+  { address: "10.0.20.1", subnet: "10.0.20.0/24", description: "Dept A gateway", device_id: null },
+  { address: "10.0.30.1", subnet: "10.0.30.0/24", description: "Dept B gateway", device_id: null },
+  { address: "10.0.40.1", subnet: "10.0.40.0/24", description: "Dept C gateway", device_id: null },
+  { address: "10.0.50.1", subnet: "10.0.50.0/24", description: "Servers and printers gateway", device_id: null },
+  { address: "172.16.90.1", subnet: "172.16.90.0/24", description: "Guest Wi-Fi gateway", device_id: null },
+  { address: "10.0.50.10", subnet: "10.0.50.0/24", description: "Primary server", device_id: "primary-server" },
+  { address: "10.0.50.20", subnet: "10.0.50.0/24", description: "Printer 1", device_id: "printer-1" },
+  { address: "10.0.50.21", subnet: "10.0.50.0/24", description: "Printer 2", device_id: "printer-2" },
+  { address: "10.0.50.22", subnet: "10.0.50.0/24", description: "Printer 3", device_id: "printer-3" },
+  { address: "10.0.50.23", subnet: "10.0.50.0/24", description: "Printer 4", device_id: "printer-4" },
+];
+
+const businessSecurityRules = [
+  {
+    name: "Guest Isolation",
+    action: "deny" as const,
+    protocol: "any" as const,
+    source: "VLAN 90",
+    destination: "10.0.0.0/8, 192.168.0.0/16",
+    port: "any",
+  },
+  {
+    name: "Print Access",
+    action: "allow" as const,
+    protocol: "tcp" as const,
+    source: "VLAN 20, 30, 40",
+    destination: "VLAN 50 (Printers 10.0.50.20-23)",
+    port: "9100,631",
+  },
+  {
+    name: "Management Protection",
+    action: "deny" as const,
+    protocol: "any" as const,
+    source: "VLAN 30, 40, 90",
+    destination: "VLAN 10",
+    port: "any",
+  },
+];
 
 function arrangeTopologyHierarchically(topology: Topology): Topology {
   const incomingMap = new Map<string, number>();
@@ -866,6 +953,65 @@ export default function Home() {
     }
   }
 
+  async function loadBusinessArchitectureSetup() {
+    const token = window.localStorage.getItem("aether_access_token");
+    if (!token) {
+      window.location.replace("/login");
+      return;
+    }
+
+    try {
+      let projectId = activeProjectId;
+      if (!projectId) {
+        const createdProject = await createProject(token, {
+          name: "Corporate HQ Core Network",
+          description: "Internet -> Router -> Firewall -> Core -> Access -> Wi-Fi and server topology",
+        });
+        projectId = createdProject.id;
+        setProjects((current) => [createdProject, ...current]);
+        setActiveProjectId(projectId);
+      }
+
+      const nextTopology = arrangeTopologyHierarchically(businessSetupTopology);
+      const savedTopology = await saveTopology(token, projectId, nextTopology);
+      setTopology(savedTopology);
+      setSelectedNode(savedTopology.nodes[0]?.id ?? "");
+
+      for (const allocation of businessSubnetAllocations) {
+        try {
+          await createIpAllocation(token, projectId, {
+            address: allocation.address,
+            subnet: allocation.subnet,
+            description: allocation.description,
+            device_id: allocation.device_id,
+          });
+        } catch {
+          // Ignore duplicate or already-existing allocations during setup.
+        }
+      }
+
+      for (const rule of businessSecurityRules) {
+        try {
+          await createSecurityRule(token, projectId, rule);
+        } catch {
+          // Ignore duplicates or existing rules during setup.
+        }
+      }
+
+      setControlMessage("Corporate HQ network architecture loaded and saved");
+      setViewRefreshToken((current) => current + 1);
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_REQUIRED") {
+        window.localStorage.removeItem("aether_access_token");
+        window.location.replace("/login");
+        return;
+      }
+      setControlMessage(
+        error instanceof Error ? error.message : "Unable to load network architecture",
+      );
+    }
+  }
+
   async function exportProject() {
     const token = window.localStorage.getItem("aether_access_token");
     if (!token || !activeProjectId) return;
@@ -1148,6 +1294,9 @@ export default function Home() {
                     onClick={() => acknowledgeControl("Auto-layout complete")}
                   >
                     <Sparkles size={14} /> Auto-layout
+                  </button>
+                  <button onClick={loadBusinessArchitectureSetup}>
+                    <Database size={14} /> Load setup
                   </button>
                   <button onClick={resetView}>
                     <Eye size={14} /> View
