@@ -270,12 +270,22 @@ def update_link(project_id: str, source: str, target: str, payload: LinkCreate, 
     link = next((item for item in topology.links if item.source == source and item.target == target), None)
     if link is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Link not found")
+
+    node_ids = {node.id for node in topology.nodes}
+    if payload.source not in node_ids or payload.target not in node_ids:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Both link endpoints must be project devices")
+    if payload.source == payload.target:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="A device cannot link to itself")
+
+    candidate_pairs = {(payload.source, payload.target), (payload.target, payload.source)}
     if any(
-        ((other.source == payload.source and other.target == payload.target) or (other.source == payload.target and other.target == payload.source))
-        and not (other.source == source and other.target == target)
+        other is not link and ((other.source, other.target) in candidate_pairs or (other.target, other.source) in candidate_pairs)
         for other in topology.links
     ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A connection already exists between these devices")
+
+    link.source = payload.source
+    link.target = payload.target
     link.medium = payload.medium
     link.source_port = payload.source_port
     link.target_port = payload.target_port

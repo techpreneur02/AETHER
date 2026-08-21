@@ -220,6 +220,34 @@ def test_link_update_persists_port_details() -> None:
     assert loaded.json()["links"][0]["target_port"] == "Eth1/2"
 
 
+def test_link_update_can_reassign_endpoints_and_ports() -> None:
+    token = register("link-reassign@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Link reassign twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Core switch", "kind": "device"}).json()
+    second = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Access switch", "kind": "device"}).json()
+    third = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Server rack", "kind": "service"}).json()
+
+    created = client.post(
+        f"/projects/{project['id']}/links",
+        headers=headers,
+        json={"source": first["id"], "target": second["id"], "medium": "ethernet", "source_port": "Gi1/0/1", "target_port": "Gi1/0/24"},
+    )
+    updated = client.patch(
+        f"/projects/{project['id']}/links/{first['id']}/{second['id']}",
+        headers=headers,
+        json={"source": first["id"], "target": third["id"], "medium": "fiber", "source_port": "Eth1/1", "target_port": "Eth2/1"},
+    )
+    loaded = client.get(f"/projects/{project['id']}/topology", headers=headers)
+
+    assert created.status_code == 201
+    assert updated.status_code == 200
+    assert updated.json()["links"][0]["source"] == first["id"]
+    assert updated.json()["links"][0]["target"] == third["id"]
+    assert updated.json()["links"][0]["medium"] == "fiber"
+    assert loaded.json()["links"][0]["target_port"] == "Eth2/1"
+
+
 def test_link_creation_rejects_duplicate_connections() -> None:
     token = register("link-duplicate@example.com")
     project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Duplicate link twin"}).json()

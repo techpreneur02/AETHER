@@ -616,6 +616,8 @@ export default function Home() {
     const link = topology?.links[index];
     if (!link) return;
     setSelectedLink(link);
+    setLinkSource(link.source);
+    setLinkTarget(link.target);
     setLinkMedium(link.medium);
     setLinkSourcePort(link.source_port ?? "");
     setLinkTargetPort(link.target_port ?? "");
@@ -646,11 +648,15 @@ export default function Home() {
     if (!token || !activeProjectId || !selectedLink) return;
     try {
       setTopology(await updateLink(token, activeProjectId, selectedLink.source, selectedLink.target, {
+        source: linkSource,
+        target: linkTarget,
         medium: linkMedium,
         source_port: linkSourcePort || undefined,
         target_port: linkTargetPort || undefined,
       }));
       setSelectedLink(null);
+      setLinkSource("");
+      setLinkTarget("");
       setControlMessage("Connection details saved");
     } catch (error) {
       setControlMessage(error instanceof Error ? error.message : "Unable to update link");
@@ -1090,7 +1096,18 @@ export default function Home() {
               {selectedLink && (
                 <div className="project-form link-editor">
                   <b>Connection details</b>
-                  <span>{selectedLink.source} to {selectedLink.target}</span>
+                  <select value={linkSource} onChange={(event) => setLinkSource(event.target.value)}>
+                    <option value="">Source device</option>
+                    {(topology?.nodes ?? []).map((node) => (
+                      <option key={node.id} value={node.id}>{node.name}</option>
+                    ))}
+                  </select>
+                  <select value={linkTarget} onChange={(event) => setLinkTarget(event.target.value)}>
+                    <option value="">Target device</option>
+                    {(topology?.nodes ?? []).map((node) => (
+                      <option key={node.id} value={node.id}>{node.name}</option>
+                    ))}
+                  </select>
                   <select value={linkMedium} onChange={(event) => setLinkMedium(event.target.value as typeof linkMedium)}>
                     <option value="ethernet">Ethernet</option>
                     <option value="fiber">Fiber</option>
@@ -1100,7 +1117,11 @@ export default function Home() {
                   <input aria-label="Target port" placeholder="Target port" value={linkTargetPort} onChange={(event) => setLinkTargetPort(event.target.value)} />
                   <button type="button" onClick={saveSelectedLink}>Save connection</button>
                   <button type="button" onClick={removeSelectedLink}>Delete connection</button>
-                  <button type="button" onClick={() => setSelectedLink(null)}>Close</button>
+                  <button type="button" onClick={() => {
+                    setSelectedLink(null);
+                    setLinkSource("");
+                    setLinkTarget("");
+                  }}>Close</button>
                 </div>
               )}
               <div className="content-grid">
