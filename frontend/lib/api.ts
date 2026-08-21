@@ -173,8 +173,8 @@ export async function createLink(token: string, projectId: string, payload: { so
   return response.json();
 }
 
-export async function updateLink(token: string, projectId: string, source: string, target: string, payload: { medium: "fiber" | "ethernet" | "wireless"; source_port?: string; target_port?: string }): Promise<Topology> {
-  const response = await fetch(`${API_URL}/projects/${projectId}/links/${source}/${target}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ source, target, ...payload }) });
+export async function updateLink(token: string, projectId: string, source: string, target: string, payload: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port?: string; target_port?: string }): Promise<Topology> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/links/${source}/${target}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ source: payload.source, target: payload.target, medium: payload.medium, source_port: payload.source_port, target_port: payload.target_port }) });
   if (!response.ok) throw new Error("Unable to update link");
   return response.json();
 }
