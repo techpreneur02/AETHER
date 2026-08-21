@@ -51,11 +51,13 @@ import {
   exportProjectJson,
   exportProjectPdf,
   getTopology,
+  listIpAllocations,
   listProjects,
   queryProjectAI,
   saveTopology,
   updateDevicePosition,
   type AIQueryResponse,
+  type IPAllocation,
   type Project,
   type Topology,
 } from "../lib/api";
@@ -322,6 +324,7 @@ export default function Home() {
   const [detailVendor, setDetailVendor] = useState("");
   const [detailModel, setDetailModel] = useState("");
   const [detailPortCount, setDetailPortCount] = useState<number>(4);
+  const [ipAllocations, setIpAllocations] = useState<IPAllocation[]>([]);
   const [aiQuery, setAiQuery] = useState("");
   const [aiResponse, setAiResponse] = useState<AIQueryResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -420,6 +423,18 @@ export default function Home() {
   }, [activeProjectId]);
 
   useEffect(() => {
+    const token = window.localStorage.getItem("aether_access_token");
+    if (!token || !activeProjectId) {
+      setIpAllocations([]);
+      return;
+    }
+
+    listIpAllocations(token, activeProjectId)
+      .then((allocations) => setIpAllocations(allocations))
+      .catch(() => setIpAllocations([]));
+  }, [activeProjectId]);
+
+  useEffect(() => {
     const device = topology?.nodes.find((node) => node.id === selectedNode);
     if (!device) {
       setDetailVendor("");
@@ -463,10 +478,22 @@ export default function Home() {
         ),
       ).filter((port): port is string => Boolean(port))
     : [];
+  const selectedDeviceIps = selectedDevice
+    ? ipAllocations
+        .filter((allocation) => allocation.device_id === selectedDevice.id)
+        .map((allocation) => allocation.address)
+    : [];
+  const portCatalog = Array.from(
+    { length: Math.max(selectedDevice?.port_count ?? 4, 4) },
+    (_, index) => `Gi1/0/${index + 1}`,
+  );
   const selectedPortInventory =
     selectedDevicePorts.length > 0
       ? selectedDevicePorts
-      : Array.from({ length: Math.max(selectedDevice?.port_count ?? 4, 4) }, (_, index) => `Gi1/0/${index + 1}`);
+      : portCatalog;
+  const availableDevicePorts = portCatalog.filter(
+    (port) => !selectedDevicePorts.includes(port),
+  );
   const allVisibleNodes = topology?.nodes.length
     ? topology.nodes.map((node, index) => ({
         id: node.id,
@@ -1455,6 +1482,14 @@ export default function Home() {
                           <dt>Connections</dt>
                           <dd>{selectedDeviceLinks.length}</dd>
                         </div>
+                        <div>
+                          <dt>Used ports</dt>
+                          <dd>{selectedDevicePorts.length}</dd>
+                        </div>
+                        <div>
+                          <dt>Available ports</dt>
+                          <dd>{availableDevicePorts.length}</dd>
+                        </div>
                       </dl>
                       {selectedDevice && (
                         <div className="detail-message">
@@ -1465,11 +1500,21 @@ export default function Home() {
                           <button type="button" className="save-detail-button" onClick={saveSelectedDevice}>Save device</button>
                         </div>
                       )}
+                      {selectedDevice && selectedDeviceIps.length > 0 && (
+                        <div className="detail-message">
+                          <b>Assigned IPs</b>
+                          <ul className="ip-list">
+                            {selectedDeviceIps.map((address) => (
+                              <li key={address}>{address}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </>
                   )}
                   {detailTab === "ports" && (
                     <div className="port-panel">
-                      <b>Connected ports</b>
+                      <b>Port inventory</b>
                       <div className="port-grid">
                         {selectedPortInventory.map((port) => {
                           const associatedLink = selectedDeviceLinks.find(
@@ -1477,15 +1522,20 @@ export default function Home() {
                               (link.source === selectedNode && link.source_port === port) ||
                               (link.target === selectedNode && link.target_port === port),
                           );
+                          const isAvailable = !selectedDevicePorts.includes(port);
                           return (
-                            <div key={port} className="port-chip">
+                            <div key={port} className={`port-chip ${isAvailable ? "available" : "used"}`}>
                               <span>{port}</span>
                               <small>
-                                {associatedLink ? `${associatedLink.medium} link` : "Available"}
+                                {associatedLink ? `${associatedLink.medium} link` : isAvailable ? "Available" : "Used"}
                               </small>
                             </div>
                           );
                         })}
+                      </div>
+                      <div className="detail-message compact">
+                        <b>Available ports</b>
+                        <span>{availableDevicePorts.length > 0 ? availableDevicePorts.join(", ") : "No free ports remaining"}</span>
                       </div>
                     </div>
                   )}
