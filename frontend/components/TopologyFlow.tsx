@@ -9,10 +9,22 @@ type TopologyFlowProps = { topology: Topology; selectedNodeId?: string; onNodeCl
 type DeviceNodeData = { label: string; vendor: string; model: string; portCount: number; kind: string; ports: string[]; category: string };
 
 function defaultPortLabels(portCount: number): string[] {
-  return Array.from({ length: Math.max(4, portCount || 4) }, (_, index) => {
+  return Array.from({ length: Math.max(1, portCount || 4) }, (_, index) => {
     const portNumber = index + 1;
     return portCount <= 8 ? `Gi1/0/${portNumber}` : `Eth${portNumber}`;
   });
+}
+
+function devicePortInventory(portCount: number, assignedPorts: string[]): string[] {
+  const expectedCount = Math.max(1, portCount || 4);
+  const inventory = Array.from(new Set(assignedPorts));
+
+  for (const port of defaultPortLabels(expectedCount)) {
+    if (inventory.length >= expectedCount) break;
+    if (!inventory.includes(port)) inventory.push(port);
+  }
+
+  return inventory;
 }
 
 function DeviceNode({ data, selected }: NodeProps<Node<DeviceNodeData>>) {
@@ -66,7 +78,7 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
                   ? "ap"
                   : "device";
 
-        const previous = current.find((item) => item.id === node.id)?.position ?? {
+        const position = {
           x: node.floorplan_x != null ? node.floorplan_x * 900 : (index % 3) * 220 + 80,
           y: node.floorplan_y != null ? node.floorplan_y * 600 : Math.floor(index / 3) * 150 + 80,
         };
@@ -74,14 +86,14 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
         return {
           id: node.id,
           type: "device",
-          position: previous,
+          position,
           data: {
             label: node.name,
             vendor: node.vendor ?? "",
             model: node.model ?? "",
             portCount: node.port_count ?? Math.max(portList.length, 4),
             kind: node.kind,
-            ports: Array.from(new Set([...defaultPortLabels(node.port_count ?? 4), ...portList])),
+            ports: devicePortInventory(node.port_count ?? 4, portList),
             category,
           },
           selected: node.id === selectedNodeId,

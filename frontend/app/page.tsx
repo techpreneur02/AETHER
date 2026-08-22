@@ -294,6 +294,18 @@ function ensureExplicitLinkPorts(topology: Topology): Topology {
   return changed ? { ...topology, links } : topology;
 }
 
+function devicePortInventory(portCount: number | null | undefined, assignedPorts: string[]): string[] {
+  const expectedCount = Math.max(1, portCount ?? 4);
+  const inventory = Array.from(new Set(assignedPorts));
+
+  for (let index = 1; inventory.length < expectedCount; index += 1) {
+    const port = expectedCount <= 8 ? `Gi1/0/${index}` : `Eth${index}`;
+    if (!inventory.includes(port)) inventory.push(port);
+  }
+
+  return inventory;
+}
+
 function arrangeTopologyHierarchically(topology: Topology): Topology {
   const incomingMap = new Map<string, number>();
   const outgoingMap = new Map<string, string[]>();
@@ -364,17 +376,20 @@ function arrangeTopologyHierarchically(topology: Topology): Topology {
   });
 
   const orderedLayers = [...layerMap.entries()].sort(([a], [b]) => a - b);
+  const maximumDepth = Math.max(...orderedLayers.map(([depth]) => depth), 0);
   const positionedNodes = topology.nodes.map((node) => {
     const depth = depthMap.get(node.id) ?? 0;
     const layerIds = orderedLayers.find(([layerDepth]) => layerDepth === depth)?.[1] ?? [];
     const layerIndex = layerIds.indexOf(node.id);
-    const x = 500 + (layerIndex - (layerIds.length - 1) / 2) * 220;
-    const y = 110 + depth * 170;
+    const x = layerIds.length <= 1
+      ? 0.5
+      : 0.08 + layerIndex * (0.84 / (layerIds.length - 1));
+    const y = maximumDepth === 0 ? 0.5 : 0.08 + depth * (0.8 / maximumDepth);
 
     return {
       ...node,
-      floorplan_x: Math.max(0, Math.min(1, x / 1000)),
-      floorplan_y: Math.max(0, Math.min(1, y / 700)),
+      floorplan_x: x,
+      floorplan_y: y,
     };
   });
 
@@ -605,26 +620,16 @@ export default function Home() {
         .filter((allocation) => allocation.device_id === selectedDevice.id)
         .map((allocation) => allocation.address)
     : [];
-  const portCatalog = Array.from(
-    { length: Math.max(selectedDevice?.port_count ?? 4, 4) },
-    (_, index) => `Gi1/0/${index + 1}`,
+  const selectedPortInventory = devicePortInventory(
+    selectedDevice?.port_count,
+    selectedDevicePorts,
   );
-  const selectedPortInventory = Array.from(
-    new Set([...portCatalog, ...selectedDevicePorts]),
-  );
-  const availableDevicePorts = portCatalog.filter(
+  const availableDevicePorts = selectedPortInventory.filter(
     (port) => !selectedDevicePorts.includes(port),
   );
   const assignableNodes =
     (topology?.nodes ?? []).filter((node) => node.id !== selectedNode);
-  const selectedDevicePortOptions = selectedDevice
-    ? Array.from(
-        {
-          length: Math.max(selectedDevice.port_count ?? 4, 4),
-        },
-        (_, index) => `Gi1/0/${index + 1}`,
-      )
-    : [];
+  const selectedDevicePortOptions = selectedDevice ? selectedPortInventory : [];
   const allVisibleNodes = topology?.nodes.length
     ? topology.nodes.map((node, index) => ({
         id: node.id,
@@ -1712,7 +1717,7 @@ export default function Home() {
                           <b>Edit device metadata</b>
                           <input value={detailVendor} onChange={(event) => setDetailVendor(event.target.value)} placeholder="Vendor" />
                           <input value={detailModel} onChange={(event) => setDetailModel(event.target.value)} placeholder="Model" />
-                          <input type="number" min={4} max={96} value={detailPortCount} onChange={(event) => setDetailPortCount(Number(event.target.value) || 4)} placeholder="Port count" />
+                          <input type="number" min={1} max={96} value={detailPortCount} onChange={(event) => setDetailPortCount(Number(event.target.value) || 1)} placeholder="Port count" />
                           <button type="button" className="save-detail-button" onClick={saveSelectedDevice}>Save device</button>
                         </div>
                       )}
