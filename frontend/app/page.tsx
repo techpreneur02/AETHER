@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { LucideIcon } from "lucide-react";
 import type { Connection } from "@xyflow/react";
 import {
@@ -522,6 +522,10 @@ export default function Home() {
   const [simulationRunning, setSimulationRunning] = useState(false);
   const [simulationError, setSimulationError] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [showSidebar, setShowSidebar] = useState(true);
+  const [showAiPanel, setShowAiPanel] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(174);
+  const [aiPanelWidth, setAiPanelWidth] = useState(350);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("aether_theme");
@@ -1359,6 +1363,10 @@ export default function Home() {
   const matchingModules = searchQuery ? Object.entries(navigationRoutes).filter(([label]) =>
     label.toLowerCase().includes(searchQuery),
   ).slice(0, 5) : [];
+  const workspaceStyle = {
+    "--sidebar-width": `${sidebarWidth}px`,
+    "--ai-panel-width": `${aiPanelWidth}px`,
+  } as CSSProperties;
 
   return (
     <main className={`console-shell ${compactMode ? "compact-console" : ""}`}>
@@ -1464,8 +1472,8 @@ export default function Home() {
       {activeTopPanel === "notifications" && <section className="ops-popover notifications-popover"><div className="panel-heading"><b>NOTIFICATIONS</b><button className="panel-icon" aria-label="Close notifications" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div>{notifications.length ? notifications.map((notification) => <button key={notification} onClick={() => { setNotifications((current) => current.filter((item) => item !== notification)); setControlMessage(`${notification} acknowledged`); }}>{notification}<small>Acknowledge</small></button>) : <div className="popover-empty"><Check size={15} /> All caught up</div>}</section>}
       {activeTopPanel === "settings" && <section className="ops-popover settings-popover"><div className="panel-heading"><b>CONSOLE SETTINGS</b><button className="panel-icon" aria-label="Close settings" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div><label><input type="checkbox" checked={compactMode} onChange={(event) => setCompactMode(event.target.checked)} /> Compact operations layout</label><button onClick={toggleTheme}>{theme === "light" ? "Switch to dark theme" : "Switch to light theme"}</button><a href="/config">Open configuration workspace</a></section>}
       {activeTopPanel === "account" && <section className="ops-popover account-popover"><div className="account-summary"><span className="avatar">SA</span><div><b>Sherwin Armas</b><small>Administrator</small></div></div><a href="/members">Manage members</a><a href="/knowledge-base">Open knowledge base</a><button className="sign-out-action" onClick={signOut}>Sign out</button></section>}
-      <div className="workspace">
-        <aside className="sidebar">
+      <div className="workspace" style={workspaceStyle}>
+        {showSidebar && <aside className="sidebar">
           <div className="side-section-label">OPERATIONS</div>
           {navigation.map(([label, Icon]) =>
             navigationRoutes[label] ? (
@@ -1509,17 +1517,22 @@ export default function Home() {
             <BookOpen size={15} />
             <span>Knowledge Base</span>
           </a>
-          <div className="engine-status">
-            <span className="pulse" />
-            <div>
-              <b>VPS ENGINE</b>
-              <small>
-                {isLive ? "Online · Simulator" : "Paused · Simulator"}
-              </small>
-            </div>
-          </div>
-        </aside>
+        </aside>}
         <section className="main-stage">
+          <div className="dashboard-frame-controls">
+            <div className="tab-engine-status">
+              <span className="pulse" />
+              <div><b>VPS ENGINE</b><small>{isLive ? "Online · Simulator" : "Paused · Simulator"}</small></div>
+            </div>
+            <button aria-pressed={showSidebar} onClick={() => setShowSidebar((current) => !current)}>
+              <Menu size={14} /> {showSidebar ? "Hide nav" : "Show nav"}
+            </button>
+            <label className={!showSidebar ? "disabled" : ""}>Nav width<input disabled={!showSidebar} type="range" min="132" max="240" value={sidebarWidth} onChange={(event) => setSidebarWidth(Number(event.target.value))} /></label>
+            <button aria-pressed={showAiPanel} onClick={() => setShowAiPanel((current) => !current)}>
+              <PanelRight size={14} /> {showAiPanel ? "Hide AI" : "Show AI"}
+            </button>
+            <label className={!showAiPanel ? "disabled" : ""}>AI width<input disabled={!showAiPanel} type="range" min="280" max="460" value={aiPanelWidth} onChange={(event) => setAiPanelWidth(Number(event.target.value))} /></label>
+          </div>
           <div className="stage-tabs">
             <button
               className={activeStage === "TOPOLOGY" ? "selected" : ""}
@@ -2378,7 +2391,7 @@ export default function Home() {
             </div>
           )}
         </section>
-        <aside className="ai-side-panel" aria-label="AI operations assistant">
+        {showAiPanel && <aside className="ai-side-panel" aria-label="AI operations assistant">
           <div className="ai-side-header">
             <div className="ai-side-title">
               <span className="ai-orbit"><Sparkles size={16} /></span>
@@ -2441,7 +2454,7 @@ export default function Home() {
             </button>
           </form>
           {aiError && <p className="ai-side-error">{aiError}</p>}
-        </aside>
+        </aside>}
       </div>
       <footer className="statusbar">
         <span>
