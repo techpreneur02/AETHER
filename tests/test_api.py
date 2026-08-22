@@ -183,9 +183,9 @@ def test_link_crud_requires_project_devices() -> None:
     first = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Switch A"}).json()
     second = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Switch B"}).json()
 
-    created = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": second["id"], "medium": "ethernet"})
+    created = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": second["id"], "medium": "ethernet", "source_port": "Gi1/0/1", "target_port": "Gi1/0/24"})
     deleted = client.delete(f"/projects/{project['id']}/links/{first['id']}/{second['id']}", headers=headers)
-    invalid = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": "missing", "medium": "fiber"})
+    invalid = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": "missing", "medium": "fiber", "source_port": "SFP1", "target_port": "SFP1"})
 
     assert created.status_code == 201
     assert len(created.json()["links"]) == 1
@@ -255,11 +255,27 @@ def test_link_creation_rejects_duplicate_connections() -> None:
     first = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Core switch", "kind": "device"}).json()
     second = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Access switch", "kind": "device"}).json()
 
-    first_create = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": second["id"], "medium": "ethernet"})
-    reverse_duplicate = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": second["id"], "target": first["id"], "medium": "fiber"})
+    first_create = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": first["id"], "target": second["id"], "medium": "ethernet", "source_port": "Gi1/0/1", "target_port": "Gi1/0/24"})
+    reverse_duplicate = client.post(f"/projects/{project['id']}/links", headers=headers, json={"source": second["id"], "target": first["id"], "medium": "fiber", "source_port": "SFP1", "target_port": "SFP2"})
 
     assert first_create.status_code == 201
     assert reverse_duplicate.status_code == 409
+
+
+def test_link_creation_requires_explicit_endpoint_ports() -> None:
+    token = register("link-ports@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Port assignment twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Router"}).json()
+    second = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Switch"}).json()
+
+    response = client.post(
+        f"/projects/{project['id']}/links",
+        headers=headers,
+        json={"source": first["id"], "target": second["id"], "medium": "ethernet"},
+    )
+
+    assert response.status_code == 422
 
 
 def test_ip_allocation_crud_is_scoped_and_rejects_duplicates() -> None:

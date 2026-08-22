@@ -21,7 +21,6 @@ function DeviceNode({ data, selected }: NodeProps<Node<DeviceNodeData>>) {
 
   return <div className={`flow-device-node ${selected ? "selected" : ""} ${category}`}>
     <Handle type="target" position={Position.Top} id="top" />
-    <Handle type="target" position={Position.Left} id="left" />
     <div className="flow-device-header">
       <span className="flow-device-badge">{category === "gateway" ? "GW" : category === "switch" ? "SW" : category === "controller" ? "CTRL" : category === "ap" ? "AP" : category === "internet" ? "NET" : "DEV"}</span>
       <b>{data.label}</b>
@@ -31,7 +30,6 @@ function DeviceNode({ data, selected }: NodeProps<Node<DeviceNodeData>>) {
       {visiblePorts.slice(0, 8).map((port) => <span key={port}>{port}</span>)}
     </div>
     <small>{data.portCount} ports</small>
-    <Handle type="source" position={Position.Right} id="right" />
     <Handle type="source" position={Position.Bottom} id="bottom" />
   </div>;
 }
@@ -83,7 +81,7 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
             model: node.model ?? "",
             portCount: node.port_count ?? Math.max(portList.length, 4),
             kind: node.kind,
-            ports: portList.length ? Array.from(new Set(portList)) : defaultPortLabels(node.port_count ?? 4),
+            ports: Array.from(new Set([...defaultPortLabels(node.port_count ?? 4), ...portList])),
             category,
           },
           selected: node.id === selectedNodeId,
@@ -101,7 +99,10 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
       id: stableId,
       source: link.source,
       target: link.target,
-      label: `${link.medium}${link.source_port || link.target_port ? ` · ${link.source_port || "?"} ↔ ${link.target_port || "?"}` : ""}`,
+      sourceHandle: "bottom",
+      targetHandle: "top",
+      type: "step",
+      label: `${link.medium} · ${link.source_port || "Unassigned"} → ${link.target_port || "Unassigned"}`,
       animated: link.medium === "wireless",
       style: { stroke: link.medium === "fiber" ? "#49c9df" : link.medium === "wireless" ? "#b27ef2" : "#8ba4b5", strokeWidth: 2 },
       labelStyle: { fill: "#d9e6f2", fontSize: 10 },

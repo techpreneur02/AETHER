@@ -9,5 +9,5 @@ class LinkCreate(BaseModel):
     source: str = Field(min_length=1)
     target: str = Field(min_length=1)
     medium: Literal["fiber", "ethernet", "wireless"]
-    source_port: str | None = None
-    target_port: str | None = None
+    source_port: str = Field(min_length=1)
+    target_port: str = Field(min_length=1)

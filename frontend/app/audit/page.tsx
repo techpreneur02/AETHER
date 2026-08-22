@@ -115,14 +115,14 @@ export default function InfrastructureAuditPage() {
   }
 
   async function addConnection(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const token = window.localStorage.getItem("aether_access_token"); if (!token || !projectId || !source || !target || source === target) return;
+    event.preventDefault(); const token = window.localStorage.getItem("aether_access_token"); if (!token || !projectId || !source || !target || source === target || !sourcePort.trim() || !targetPort.trim()) return;
     try {
       setTopology(await createLink(token, projectId, {
         source,
         target,
         medium,
-        source_port: sourcePort || undefined,
-        target_port: targetPort || undefined,
+        source_port: sourcePort.trim(),
+        target_port: targetPort.trim(),
       }));
       setSource("");
       setTarget("");
@@ -250,10 +250,10 @@ export default function InfrastructureAuditPage() {
               <select value={target} onChange={(event) => setTarget(event.target.value)}><option value="">Target asset</option>{topology.nodes.map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}</select>
               <select value={medium} onChange={(event) => setMedium(event.target.value as typeof medium)}><option value="ethernet">Ethernet</option><option value="fiber">Fiber</option><option value="wireless">Wireless</option></select>
               <div className="audit-port-row">
-                <input value={sourcePort} onChange={(event) => setSourcePort(event.target.value)} placeholder="Source port" />
-                <input value={targetPort} onChange={(event) => setTargetPort(event.target.value)} placeholder="Target port" />
+                <input required value={sourcePort} onChange={(event) => setSourcePort(event.target.value)} placeholder="Source port" />
+                <input required value={targetPort} onChange={(event) => setTargetPort(event.target.value)} placeholder="Target port" />
               </div>
-              <button disabled={!projectId || !source || !target}><Link2 size={13} /> Add connection</button>
+              <button disabled={!projectId || !source || !target || !sourcePort.trim() || !targetPort.trim()}><Link2 size={13} /> Add connection</button>
             </form>
             <label className="audit-intake-card audit-import"><b>Import discovery</b><span><FileUp size={15} /> CSV or Nmap XML</span><input type="file" accept=".csv,.xml,text/csv,application/xml" onChange={(event) => importAuditFile(event, event.target.files?.[0]?.name.endsWith(".xml") ? "nmap" : "csv")} disabled={!projectId} /></label>
           </div>

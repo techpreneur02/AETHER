@@ -272,6 +272,28 @@ const businessSecurityRules = [
   },
 ];
 
+function ensureExplicitLinkPorts(topology: Topology): Topology {
+  const endpointCounts = new Map<string, number>();
+  let changed = false;
+
+  const nextEndpointPort = (nodeId: string) => {
+    const nextCount = (endpointCounts.get(nodeId) ?? 0) + 1;
+    endpointCounts.set(nodeId, nextCount);
+    return `Port ${nextCount}`;
+  };
+
+  const links = topology.links.map((link) => {
+    const fallbackSourcePort = nextEndpointPort(link.source);
+    const fallbackTargetPort = nextEndpointPort(link.target);
+    const sourcePort = link.source_port?.trim() || fallbackSourcePort;
+    const targetPort = link.target_port?.trim() || fallbackTargetPort;
+    changed ||= sourcePort !== link.source_port || targetPort !== link.target_port;
+    return { ...link, source_port: sourcePort, target_port: targetPort };
+  });
+
+  return changed ? { ...topology, links } : topology;
+}
+
 function arrangeTopologyHierarchically(topology: Topology): Topology {
   const incomingMap = new Map<string, number>();
   const outgoingMap = new Map<string, string[]>();
@@ -346,7 +368,7 @@ function arrangeTopologyHierarchically(topology: Topology): Topology {
     const depth = depthMap.get(node.id) ?? 0;
     const layerIds = orderedLayers.find(([layerDepth]) => layerDepth === depth)?.[1] ?? [];
     const layerIndex = layerIds.indexOf(node.id);
-    const x = 120 + (layerIndex + 1) * 220;
+    const x = 500 + (layerIndex - (layerIds.length - 1) / 2) * 220;
     const y = 110 + depth * 170;
 
     return {
@@ -503,14 +525,21 @@ export default function Home() {
             });
           return;
         }
+        const normalizedTopology = ensureExplicitLinkPorts(loadedTopology);
+        const shouldPersistNormalization = normalizedTopology !== loadedTopology;
         const arrangedTopology =
-          loadedTopology.nodes.some(
+          normalizedTopology.nodes.some(
             (node) => node.floorplan_x == null || node.floorplan_y == null,
           )
-            ? arrangeTopologyHierarchically(loadedTopology)
-            : loadedTopology;
+            ? arrangeTopologyHierarchically(normalizedTopology)
+            : normalizedTopology;
         setTopology(arrangedTopology);
         setSelectedNode((current) => current || arrangedTopology.nodes[0]?.id || "");
+        if (shouldPersistNormalization) {
+          saveTopology(token, activeProjectId, arrangedTopology)
+            .then(setTopology)
+            .catch(() => setControlMessage("Legacy links need port assignment review"));
+        }
       })
       .catch(() => setTopologyLoadError(true));
   }, [activeProjectId]);
@@ -784,7 +813,9 @@ export default function Home() {
       !activeProjectId ||
       !linkSource ||
       !linkTarget ||
-      linkSource === linkTarget
+      linkSource === linkTarget ||
+      !linkSourcePort.trim() ||
+      !linkTargetPort.trim()
     )
       return;
     setLinkSaving(true);
@@ -794,8 +825,8 @@ export default function Home() {
           source: linkSource,
           target: linkTarget,
           medium: linkMedium,
-          source_port: linkSourcePort || undefined,
-          target_port: linkTargetPort || undefined,
+          source_port: linkSourcePort.trim(),
+          target_port: linkTargetPort.trim(),
         }),
       );
       setShowLinkForm(false);
@@ -810,30 +841,20 @@ export default function Home() {
     }
   }
 
-  async function connectTopologyNodes(connection: Connection) {
-    const token = window.localStorage.getItem("aether_access_token");
+  function connectTopologyNodes(connection: Connection) {
     if (
-      !token ||
       !activeProjectId ||
       !connection.source ||
       !connection.target ||
       connection.source === connection.target
     )
       return;
-    try {
-      setTopology(
-        await createLink(token, activeProjectId, {
-          source: connection.source,
-          target: connection.target,
-          medium: linkMedium,
-        }),
-      );
-      setControlMessage(`${linkMedium} link created`);
-    } catch (error) {
-      setControlMessage(
-        error instanceof Error ? error.message : "Unable to create link",
-      );
-    }
+    setLinkSource(connection.source);
+    setLinkTarget(connection.target);
+    setLinkSourcePort("");
+    setLinkTargetPort("");
+    setShowLinkForm(true);
+    setControlMessage("Assign both endpoint ports to complete the link");
   }
 
   async function persistNodePosition(node: {
@@ -906,6 +927,10 @@ export default function Home() {
   async function saveSelectedLink() {
     const token = window.localStorage.getItem("aether_access_token");
     if (!token || !activeProjectId || !selectedLink) return;
+    if (!linkSourcePort.trim() || !linkTargetPort.trim()) {
+      setControlMessage("Source and target ports are required");
+      return;
+    }
     const originalSource = selectedLinkOrigin?.source ?? selectedLink.source;
     const originalTarget = selectedLinkOrigin?.target ?? selectedLink.target;
     try {
@@ -913,8 +938,8 @@ export default function Home() {
         source: linkSource,
         target: linkTarget,
         medium: linkMedium,
-        source_port: linkSourcePort || undefined,
-        target_port: linkTargetPort || undefined,
+        source_port: linkSourcePort.trim(),
+        target_port: linkTargetPort.trim(),
       }));
       setSelectedLink(null);
       setSelectedLinkOrigin(null);
@@ -953,7 +978,7 @@ export default function Home() {
         source: selectedNode,
         target: deviceAssignTarget,
         medium: deviceAssignMedium,
-        source_port: deviceAssignSourcePort || selectedDevicePortOptions[0] || undefined,
+        source_port: deviceAssignSourcePort || selectedDevicePortOptions[0],
         target_port: deviceAssignTargetPort || "Port 1",
       });
       setTopology(nextTopology);
@@ -1438,8 +1463,8 @@ export default function Home() {
                     <option value="fiber">Fiber</option>
                     <option value="wireless">Wireless</option>
                   </select>
-                  <input placeholder="Source port e.g. Gi1/0/1" value={linkSourcePort} onChange={(event) => setLinkSourcePort(event.target.value)} />
-                  <input placeholder="Target port e.g. Gi1/0/24" value={linkTargetPort} onChange={(event) => setLinkTargetPort(event.target.value)} />
+                  <input required placeholder="Source port e.g. Gi1/0/1" value={linkSourcePort} onChange={(event) => setLinkSourcePort(event.target.value)} />
+                  <input required placeholder="Target port e.g. Gi1/0/24" value={linkTargetPort} onChange={(event) => setLinkTargetPort(event.target.value)} />
                   <button disabled={linkSaving || !activeProjectId}>
                     {linkSaving ? "Saving..." : "Create link"}
                   </button>
