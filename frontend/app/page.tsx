@@ -580,11 +580,39 @@ export default function Home() {
       setDetailVendor("");
       setDetailModel("");
       setDetailPortCount(4);
+      setDeviceAssignTarget("");
+      setDeviceAssignSourcePort("");
+      setDeviceAssignTargetPort("");
       return;
     }
+    const deviceLinks = topology?.links.filter(
+      (link) => link.source === selectedNode || link.target === selectedNode,
+    ) ?? [];
+    const assignedPorts = deviceLinks
+      .map((link) => link.source === selectedNode ? link.source_port : link.target_port)
+      .filter((port): port is string => Boolean(port));
+    const primaryLink = deviceLinks[0];
+
     setDetailVendor(device.vendor ?? "");
     setDetailModel(device.model ?? "");
-    setDetailPortCount(device.port_count ?? Math.max(selectedDevicePorts.length, 4));
+    setDetailPortCount(device.port_count ?? Math.max(assignedPorts.length, 4));
+    setDetailTab("overview");
+    setDeviceAssignTarget(
+      primaryLink
+        ? primaryLink.source === selectedNode ? primaryLink.target : primaryLink.source
+        : "",
+    );
+    setDeviceAssignMedium(primaryLink?.medium ?? "ethernet");
+    setDeviceAssignSourcePort(
+      primaryLink
+        ? (primaryLink.source === selectedNode ? primaryLink.source_port : primaryLink.target_port) ?? ""
+        : "",
+    );
+    setDeviceAssignTargetPort(
+      primaryLink
+        ? (primaryLink.source === selectedNode ? primaryLink.target_port : primaryLink.source_port) ?? ""
+        : "",
+    );
   }, [selectedNode, topology]);
 
   useEffect(() => {
@@ -618,10 +646,8 @@ export default function Home() {
         ),
       ).filter((port): port is string => Boolean(port))
     : [];
-  const selectedDeviceIps = selectedDevice
-    ? ipAllocations
-        .filter((allocation) => allocation.device_id === selectedDevice.id)
-        .map((allocation) => allocation.address)
+  const selectedDeviceIpAllocations = selectedDevice
+    ? ipAllocations.filter((allocation) => allocation.device_id === selectedDevice.id)
     : [];
   const selectedPortInventory = devicePortInventory(
     selectedDevice?.port_count,
@@ -981,19 +1007,36 @@ export default function Home() {
       return;
     }
 
+    const localPort = deviceAssignSourcePort || selectedDevicePortOptions[0];
+    const remotePort = deviceAssignTargetPort.trim();
+    if (!localPort || !remotePort) {
+      setControlMessage("Both device and target ports are required");
+      return;
+    }
+    const existingLink = selectedDeviceLinks.find(
+      (link) =>
+        (link.source === selectedNode && link.target === deviceAssignTarget) ||
+        (link.target === selectedNode && link.source === deviceAssignTarget),
+    );
+
     try {
-      const nextTopology = await createLink(token, activeProjectId, {
-        source: selectedNode,
-        target: deviceAssignTarget,
-        medium: deviceAssignMedium,
-        source_port: deviceAssignSourcePort || selectedDevicePortOptions[0],
-        target_port: deviceAssignTargetPort || "Port 1",
-      });
+      const nextTopology = existingLink
+        ? await updateLink(token, activeProjectId, existingLink.source, existingLink.target, {
+            source: existingLink.source,
+            target: existingLink.target,
+            medium: deviceAssignMedium,
+            source_port: existingLink.source === selectedNode ? localPort : remotePort,
+            target_port: existingLink.target === selectedNode ? localPort : remotePort,
+          })
+        : await createLink(token, activeProjectId, {
+            source: selectedNode,
+            target: deviceAssignTarget,
+            medium: deviceAssignMedium,
+            source_port: localPort,
+            target_port: remotePort,
+          });
       setTopology(nextTopology);
-      setDeviceAssignTarget("");
-      setDeviceAssignSourcePort("");
-      setDeviceAssignTargetPort("");
-      setControlMessage("Device assignment created");
+      setControlMessage(existingLink ? "Connection assignment updated" : "Device assignment created");
     } catch (error) {
       setControlMessage(
         error instanceof Error ? error.message : "Unable to assign device",
@@ -1687,6 +1730,10 @@ export default function Home() {
                           <dd>{selectedDevice?.name ?? "No device selected"}</dd>
                         </div>
                         <div>
+                          <dt>Device ID</dt>
+                          <dd>{selectedDevice?.id ?? "Not available"}</dd>
+                        </div>
+                        <div>
                           <dt>Kind</dt>
                           <dd>{selectedDevice?.kind ?? "unknown"}</dd>
                         </div>
@@ -1713,6 +1760,10 @@ export default function Home() {
                         <div>
                           <dt>Available ports</dt>
                           <dd>{availableDevicePorts.length}</dd>
+                        </div>
+                        <div>
+                          <dt>IP address</dt>
+                          <dd>{selectedDeviceIpAllocations.map((allocation) => allocation.address).join(", ") || "Not assigned"}</dd>
                         </div>
                       </dl>
                       {selectedDevice && (
@@ -1744,16 +1795,25 @@ export default function Home() {
                               <option key={port} value={port}>{port}</option>
                             ))}
                           </select>
-                          <input value={deviceAssignTargetPort} onChange={(event) => setDeviceAssignTargetPort(event.target.value)} placeholder="Target port" />
-                          <button type="button" onClick={assignDeviceToTarget}>Assign link</button>
+                          <input aria-label="Connected device port" value={deviceAssignTargetPort} onChange={(event) => setDeviceAssignTargetPort(event.target.value)} placeholder="Connected device port" />
+                          <button type="button" onClick={assignDeviceToTarget}>
+                            {selectedDeviceLinks.some(
+                              (link) =>
+                                (link.source === selectedNode && link.target === deviceAssignTarget) ||
+                                (link.target === selectedNode && link.source === deviceAssignTarget),
+                            ) ? "Update connection" : "Assign link"}
+                          </button>
                         </div>
                       )}
-                      {selectedDevice && selectedDeviceIps.length > 0 && (
+                      {selectedDevice && selectedDeviceIpAllocations.length > 0 && (
                         <div className="detail-message">
-                          <b>Assigned IPs</b>
+                          <b>IP assignments</b>
                           <ul className="ip-list">
-                            {selectedDeviceIps.map((address) => (
-                              <li key={address}>{address}</li>
+                            {selectedDeviceIpAllocations.map((allocation) => (
+                              <li key={allocation.id}>
+                                <strong>{allocation.address}</strong> · {allocation.subnet}
+                                {allocation.description ? ` · ${allocation.description}` : ""}
+                              </li>
                             ))}
                           </ul>
                         </div>
