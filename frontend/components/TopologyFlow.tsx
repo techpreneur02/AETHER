@@ -53,7 +53,17 @@ const nodeTypes = { device: DeviceNode };
 
 export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, onConnect, onNodeDragStop, onEdgeClick, fitViewTrigger = 0 }: TopologyFlowProps) {
   const [flowNodes, setFlowNodes] = useState<Node<DeviceNodeData>[]>([]);
+  const [colorMode, setColorMode] = useState<"light" | "dark">("light");
   const reactFlowInstance = useRef<ReactFlowInstance<Node<DeviceNodeData>, Edge> | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTheme = () => setColorMode(root.dataset.theme === "dark" ? "dark" : "light");
+    syncTheme();
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (fitViewTrigger > 0 && reactFlowInstance.current) {
@@ -120,7 +130,7 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
       label: `${link.medium} · ${link.source_port || "Unassigned"} → ${link.target_port || "Unassigned"}${link.operational_status === "down" ? " · DOWN" : ""}`,
       animated: link.medium === "wireless" && link.operational_status !== "down",
       style: { stroke: link.operational_status === "down" ? "#f05a67" : link.medium === "fiber" ? "#49c9df" : link.medium === "wireless" ? "#b27ef2" : "#8ba4b5", strokeWidth: 2, strokeDasharray: link.operational_status === "down" ? "7 5" : undefined },
-      labelStyle: { fill: "#d9e6f2", fontSize: 10 },
+      labelStyle: { fill: colorMode === "light" ? "#344656" : "#d9e6f2", fontSize: 10 },
     };
   });
 
@@ -147,5 +157,5 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
     if (flowNodes.find((item) => item.id === selectedNodeId)) onNodeDragStop?.({ ...flowNodes.find((item) => item.id === selectedNodeId)!, position: snapped });
   }
 
-  return <div className="flow-wrap" tabIndex={0} onKeyDown={handleKeyDown}><ReactFlow<Node<DeviceNodeData>, Edge> nodes={flowNodes} edges={edges} nodeTypes={nodeTypes} snapToGrid snapGrid={[20, 20]} nodesDraggable nodesConnectable fitView colorMode="dark" onInit={(instance) => { reactFlowInstance.current = instance; }} onNodeClick={(_, node) => onNodeClick?.(node.id)} onNodeDragStop={handleNodeDragStop} onEdgeClick={(_, edge) => onEdgeClick?.(edge.id)} onConnect={onConnect}><Background color="#29445a" gap={24} /><Controls /><MiniMap nodeColor="#49c9df" /></ReactFlow></div>;
+  return <div className="flow-wrap" tabIndex={0} onKeyDown={handleKeyDown}><ReactFlow<Node<DeviceNodeData>, Edge> nodes={flowNodes} edges={edges} nodeTypes={nodeTypes} snapToGrid snapGrid={[20, 20]} nodesDraggable nodesConnectable fitView colorMode={colorMode} onInit={(instance) => { reactFlowInstance.current = instance; }} onNodeClick={(_, node) => onNodeClick?.(node.id)} onNodeDragStop={handleNodeDragStop} onEdgeClick={(_, edge) => onEdgeClick?.(edge.id)} onConnect={onConnect}><Background color={colorMode === "light" ? "#d7e0e7" : "#29445a"} gap={24} /><Controls /><MiniMap nodeColor={colorMode === "light" ? "#087f8c" : "#49c9df"} /></ReactFlow></div>;
 }

@@ -6,6 +6,7 @@ import type { Connection } from "@xyflow/react";
 import {
   Activity,
   Bell,
+  BookOpen,
   Box,
   Cable,
   Camera,
@@ -25,6 +26,7 @@ import {
   ListTodo,
   LockKeyhole,
   Menu,
+  Moon,
   Network,
   PanelRight,
   Plus,
@@ -35,6 +37,7 @@ import {
   ShieldCheck,
   Sparkles,
   SquareTerminal,
+  Sun,
   Users,
   Wifi,
   X,
@@ -507,6 +510,21 @@ export default function Home() {
   const [simulationResult, setSimulationResult] = useState<PacketSimulation | null>(null);
   const [simulationRunning, setSimulationRunning] = useState(false);
   const [simulationError, setSimulationError] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("aether_theme");
+    const nextTheme = savedTheme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = nextTheme;
+    setTheme(nextTheme);
+  }, []);
+
+  function toggleTheme() {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem("aether_theme", nextTheme);
+    setTheme(nextTheme);
+  }
 
   useEffect(() => {
     const token = window.localStorage.getItem("aether_access_token");
@@ -1299,6 +1317,14 @@ export default function Home() {
             <span className="pulse" /> SYSTEM HEALTH <b>100%</b>
           </div>
           <button
+            className="icon-action theme-toggle"
+            title={`Use ${theme === "light" ? "dark" : "light"} theme`}
+            aria-label={`Use ${theme === "light" ? "dark" : "light"} theme`}
+            onClick={toggleTheme}
+          >
+            {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
+          </button>
+          <button
             className="icon-action"
             title="Search"
             onClick={() => document.getElementById("device-search")?.focus()}
@@ -1380,6 +1406,10 @@ export default function Home() {
           <a className="nav-item nav-link" href="/members">
             <Users size={15} />
             <span>Members</span>
+          </a>
+          <a className="nav-item nav-link" href="/knowledge-base">
+            <BookOpen size={15} />
+            <span>Knowledge Base</span>
           </a>
           <div className="engine-status">
             <span className="pulse" />

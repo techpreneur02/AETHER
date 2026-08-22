@@ -1,0 +1,242 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  Wrench,
+} from "lucide-react";
+import "../globals.css";
+
+type Guide = "user" | "admin";
+
+type GuideSection = {
+  id: string;
+  title: string;
+  summary: string;
+  steps: string[];
+  note?: string;
+};
+
+const userGuide: GuideSection[] = [
+  {
+    id: "getting-started",
+    title: "Getting started",
+    summary: "Sign in, choose a company project, and understand the operating workspace.",
+    steps: [
+      "Sign in with the account supplied by your administrator. A successful sign-in opens the Operations Console.",
+      "Use the Project selector in the top bar before entering or changing infrastructure data. Every device, address, rule, and simulation belongs to the selected project.",
+      "Use the left navigation for inventory modules. Use the tabs above the workspace for Topology, Device Details, Simulator, Floorplans, Imports, Config, Racks, Cameras, Power, Services, and Compliance.",
+      "Confirm the VPS Engine indicator is online before saving changes. A sync warning means the browser could not complete the latest request.",
+    ],
+    note: "Keep one project per company or clearly bounded environment. Verify the selected project before every audit session.",
+  },
+  {
+    id: "infrastructure-audit",
+    title: "Run an infrastructure audit",
+    summary: "Capture the company, locations, equipment, links, addresses, and evidence in a repeatable order.",
+    steps: [
+      "Open Infrastructure Audit and select the target project.",
+      "Record the site and room scope first, then enter discovered devices with vendor, model, role, port count, serial or asset references, and physical location where available.",
+      "Add IP allocations and map each address to its device. Record management, server, printer, wireless, guest, and user subnets separately.",
+      "Add physical and logical connections. Assign the exact source port, target port, medium, and current operational status.",
+      "Upload supported CSV or Nmap XML evidence through Imports when inventory already exists. Review imported records before treating them as verified.",
+      "Run the audit checks, resolve missing assignments, then export JSON for machine-readable backup and PDF for the client record.",
+    ],
+    note: "AETHER-IT records uploaded and observed data; it does not scan a private customer network from the VPS.",
+  },
+  {
+    id: "topology",
+    title: "Build and edit the topology",
+    summary: "Place devices, assign ports, reconnect links, and keep the diagram aligned.",
+    steps: [
+      "Open Topology and add or select a device. Drag devices on the canvas; positions snap to the configured grid.",
+      "Create a link by dragging from a device handle to another device, or use the link editor for explicit source and target selection.",
+      "Select a wire to change its source device, target device, source port, target port, medium, or Up/Down state.",
+      "Use Device Details to review all existing connections before assigning a port. Avoid assigning one physical port to two active links unless the real device supports that design.",
+      "Use Fit View after reorganizing a large topology. Save and reload once to confirm positions and assignments persist.",
+    ],
+  },
+  {
+    id: "device-ip",
+    title: "Maintain devices, ports, and IP addresses",
+    summary: "Keep technical records complete enough for support and handover.",
+    steps: [
+      "Select a device and open Device Details to update its name, vendor, model, type, port count, and operational metadata.",
+      "Review the port panel for available and assigned interfaces. Existing link and port assignments appear with the device record.",
+      "Open IP Management to add an address, CIDR subnet, description, and optional device assignment.",
+      "Use consistent names such as site-role-sequence and descriptions that identify VLAN or service purpose.",
+      "After a change, verify the topology, address table, and exported project record all show the same result.",
+    ],
+  },
+  {
+    id: "simulation-security",
+    title: "Validate paths and security policy",
+    summary: "Test reachability across the recorded multi-vendor design.",
+    steps: [
+      "Open Simulator and choose source and destination devices.",
+      "Select the protocol and destination port that represent the application flow, then run the packet trace.",
+      "Read each hop with its inbound and outbound port. Delivered means a recorded path exists; Blocked identifies the matching rule and enforcement device; Unreachable means no active path exists.",
+      "Open Security to create allow or deny rules. Assign an enforcement device when the policy belongs to a firewall or gateway.",
+      "Set a link Down to test an outage, rerun the trace, and restore it to Up when the scenario is complete.",
+    ],
+    note: "The simulator validates the saved logical model. It does not replace vendor configuration testing or live packet capture.",
+  },
+  {
+    id: "reports-ai",
+    title: "Use reports and the AI assistant",
+    summary: "Turn current records into findings, actions, and handover material.",
+    steps: [
+      "Review Current State in the right assistant panel for device, link, isolation, and address totals.",
+      "Use a suggested prompt or ask a project-specific question. AI responses are grounded in the selected project where indicated.",
+      "Review proposed Actions before opening the related workspace. AI actions only navigate to approved product functions.",
+      "Open Compliance and Reports to review gaps and project metrics, then export the final project record.",
+      "Treat generated suggestions as engineering assistance. A qualified administrator remains responsible for production changes.",
+    ],
+  },
+];
+
+const adminGuide: GuideSection[] = [
+  {
+    id: "access-control",
+    title: "Users and access control",
+    summary: "Provision accounts carefully and review access as part of normal operations.",
+    steps: [
+      "Create the initial administrator through the approved registration flow, then sign in and open Members.",
+      "Add or review organization members and assign only the role required for their work.",
+      "Remove or downgrade access immediately when responsibilities change. Do not share administrator credentials.",
+      "Require unique passwords and protect the server, repository, database, Gemini key, and JWT secret as separate credentials.",
+      "Review member access quarterly and after every staff or customer handover.",
+    ],
+  },
+  {
+    id: "project-governance",
+    title: "Project and data governance",
+    summary: "Maintain tenant boundaries and a reliable audit trail.",
+    steps: [
+      "Create a separate project for each customer or isolated environment. Do not reuse one project as an unstructured global inventory.",
+      "Use clear project names and descriptions that identify customer, site, and lifecycle stage.",
+      "Export project JSON before bulk imports, major topology restructuring, or policy changes.",
+      "Limit uploaded files to approved customer evidence and remove sensitive source files from local technician devices according to company policy.",
+      "Confirm API requests remain organization and project scoped after upgrades by testing with two non-administrator accounts.",
+    ],
+  },
+  {
+    id: "operations",
+    title: "Service operations and health checks",
+    summary: "Check the web tier, API, database, and AI integration independently.",
+    steps: [
+      "Confirm the public console returns HTTP 200 and the API health endpoint reports ok.",
+      "Run docker compose ps on the VPS and confirm nginx, frontend, api, and mongo are running or healthy.",
+      "Review recent container logs for repeated authentication, database, upstream, or application errors.",
+      "Verify storage reports mongo in production. Confirm Gemini is configured when AI responses are expected.",
+      "Test sign-in, project loading, one saved topology update, one packet trace, and one export after maintenance.",
+    ],
+    note: "A healthy page alone does not prove the API, database, simulator, and AI integration are all working.",
+  },
+  {
+    id: "backup-restore",
+    title: "Backup and restore",
+    summary: "Protect the database and verify that backups can actually be recovered.",
+    steps: [
+      "Schedule encrypted MongoDB backups outside the application container and retain copies according to customer and legal requirements.",
+      "Record the application commit, environment configuration, and database backup timestamp together for each release checkpoint.",
+      "Test restoration in an isolated environment. Confirm organizations, projects, devices, links, IP allocations, rules, and member records are present.",
+      "Before any production restore, stop writes, take a fresh backup, confirm the target database, and obtain change approval.",
+      "Document the restore result, validation checks, operator, and recovery time.",
+    ],
+    note: "A restore can overwrite current data. Never run a production restore without a verified backup and explicit approval.",
+  },
+  {
+    id: "upgrades",
+    title: "Upgrade and deployment procedure",
+    summary: "Promote tested releases without losing service or data.",
+    steps: [
+      "Review the release diff and confirm no unexpected environment, database, or volume changes are included.",
+      "Run the complete backend test suite and the Next.js production build from the release commit.",
+      "Back up MongoDB and record the currently deployed commit before pulling the new release on the VPS.",
+      "Rebuild only the required Docker Compose services. Restart Nginx after recreating API or frontend containers so upstream addresses are refreshed.",
+      "Run health checks and the functional smoke test. Keep the prior image or commit available for an application rollback; do not roll back database state casually.",
+    ],
+  },
+  {
+    id: "maintenance",
+    title: "Maintenance schedule",
+    summary: "Use a predictable cadence to keep records and services trustworthy.",
+    steps: [
+      "Daily: check service health, failed sign-ins, storage capacity, and backup completion.",
+      "Weekly: review errors, unresolved audit tasks, down links, isolated devices, and stale security findings.",
+      "Monthly: patch supported dependencies, review certificates and secrets, test a representative packet trace, and sample-check project exports.",
+      "Quarterly: test backup restoration, review member access, reconcile infrastructure records with a physical or controller inventory, and review retention policy.",
+      "Annually: rehearse disaster recovery and review the architecture, threat model, support ownership, and customer handover documents.",
+    ],
+  },
+  {
+    id: "troubleshooting",
+    title: "Troubleshooting",
+    summary: "Isolate common failures without risking customer data.",
+    steps: [
+      "Empty modules or repeated sign-in redirects: sign in again and verify browser storage contains a current access token.",
+      "502 response after deployment: confirm API and frontend containers are running, then restart Nginx to refresh upstream resolution.",
+      "Data does not appear: verify the selected project, account organization, API response, and MongoDB health before re-entering records.",
+      "Simulation is unreachable: inspect Down links, endpoint selection, disconnected nodes, and saved port assignments.",
+      "AI is unavailable: verify the API health response, Gemini configuration, outbound connectivity, and API logs. Deterministic state guidance should remain available.",
+      "Frontend layout issue: test at desktop and mobile widths, clear stale browser assets, and confirm the deployed frontend commit matches the release.",
+    ],
+  },
+];
+
+export default function KnowledgeBasePage() {
+  const [guide, setGuide] = useState<Guide>("user");
+  const [query, setQuery] = useState("");
+  const sections = guide === "user" ? userGuide : adminGuide;
+  const visibleSections = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return sections;
+    return sections.filter((section) =>
+      [section.title, section.summary, section.note, ...section.steps]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(normalized)),
+    );
+  }, [query, sections]);
+
+  return (
+    <main className="knowledge-shell">
+      <header className="knowledge-header">
+        <a href="/" className="knowledge-back"><ArrowLeft size={16} /> Operations Console</a>
+        <div className="auth-brand"><div className="brand-mark"><Sparkles size={18} /></div><div><strong>AETHER-IT</strong><span>Knowledge Base</span></div></div>
+        <span className="knowledge-version">GUIDE 1.0</span>
+      </header>
+      <section className="knowledge-hero">
+        <div><span className="eyebrow">DOCUMENTATION / OPERATIONS</span><h1>Knowledge Base</h1><p>Operational instructions for infrastructure auditors, users, and platform administrators.</p></div>
+        <div className="knowledge-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search procedures, features, or troubleshooting..." aria-label="Search documentation" /></div>
+      </section>
+      <div className="knowledge-layout">
+        <aside className="knowledge-nav" aria-label="Guide navigation">
+          <div className="guide-switch" role="tablist" aria-label="Guide type">
+            <button className={guide === "user" ? "selected" : ""} onClick={() => setGuide("user")}><UserRound size={15} /> User Guide</button>
+            <button className={guide === "admin" ? "selected" : ""} onClick={() => setGuide("admin")}><ShieldCheck size={15} /> Admin Guide</button>
+          </div>
+          <span className="knowledge-nav-label">IN THIS GUIDE</span>
+          {sections.map((section) => <a key={section.id} href={`#${section.id}`}><ChevronRight size={13} /> {section.title}</a>)}
+          <div className="knowledge-support"><Wrench size={16} /><div><b>Maintenance record</b><span>Document operator, date, project, change, result, and rollback reference.</span></div></div>
+        </aside>
+        <article className="knowledge-content">
+          <div className="knowledge-intro"><BookOpen size={22} /><div><span>{guide === "user" ? "USER GUIDE" : "ADMINISTRATOR GUIDE"}</span><h2>{guide === "user" ? "Operate and document infrastructure" : "Administer and maintain AETHER-IT"}</h2></div></div>
+          {visibleSections.length ? visibleSections.map((section, index) => (
+            <section className="guide-section" id={section.id} key={section.id}>
+              <div className="guide-section-number">{String(index + 1).padStart(2, "0")}</div>
+              <div className="guide-section-body"><h3>{section.title}</h3><p className="guide-summary">{section.summary}</p><ol>{section.steps.map((step) => <li key={step}><CheckCircle2 size={15} /><span>{step}</span></li>)}</ol>{section.note && <div className="guide-note"><b>Important</b><span>{section.note}</span></div>}</div>
+            </section>
+          )) : <div className="knowledge-empty"><Search size={22} /><b>No matching guidance</b><span>Try a device, workflow, maintenance, or troubleshooting term.</span></div>}
+        </article>
+      </div>
+    </main>
+  );
+}
