@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, KeyRound, Mail, ShieldCheck, Sparkles } from "lucide-react";
 import { authenticate } from "../../lib/api";
 import "../globals.css";
@@ -12,6 +12,12 @@ export default function LoginPage() {
   const [organizationName, setOrganizationName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("reason") === "session-expired") {
+      setError("Your session expired. Sign in again to continue.");
+    }
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

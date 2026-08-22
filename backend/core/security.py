@@ -8,7 +8,7 @@ from passlib.context import CryptContext
 
 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_MINUTES = 60
+ACCESS_TOKEN_MINUTES = int(os.getenv("AETHER_ACCESS_TOKEN_MINUTES", "480"))
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
