@@ -241,3 +241,47 @@ button { border: 0; color: inherit; cursor: pointer; font: inherit; }
 [data-theme="dark"] .alert-row b, [data-theme="dark"] .audit-intake-card b, [data-theme="dark"] .audit-check b { color: #d9e6f2; }
 @media (max-width: 900px) { .audit-workspace { padding: 30px 16px 105px; }.audit-intake-grid { grid-template-columns: 1fr; }.audit-port-summary ul { columns: 1; } }
 @media (max-width: 760px) { .engine-status { display: none; }.topology-alerts { padding: 10px 8px 86px; }.topology-alerts .alert-panel { min-height: 170px; }.alert-row { grid-template-columns: 62px minmax(0,1fr); }.alert-row > span:nth-child(2) { display: none; }.audit-main-card { padding: 14px; }.audit-workspace > h1 { font-size: 25px; } }
+
+/* Technician laptops: preserve working canvas on 14-15 inch displays. */
+@media (max-width: 1500px) and (max-height: 950px) {
+  .topbar { gap: 16px; padding-left: 12px; padding-right: 12px; }
+  .brand { min-width: 205px; }.project-picker { padding: 7px 9px; }.project-picker select { max-width: 150px; }
+  .sidebar { padding-left: 7px; padding-right: 7px; width: 150px; }.nav-item { gap: 8px; padding-left: 7px; padding-right: 7px; }
+  .ai-side-panel { flex-basis: 300px; padding-left: 12px; padding-right: 12px; }
+  .main-stage { padding-right: 8px; }.stage-tabs button, .stage-link { min-height: 42px; padding-left: 10px; padding-right: 10px; }
+  .stage-toolbar { padding: 12px 10px; }.stage-toolbar h1 { font-size: 21px; }.toolbar-actions { gap: 5px; max-width: 68%; }
+  .content-grid { padding-left: 10px; padding-right: 10px; }.content-grid.topology-view { align-items: start; grid-template-columns: 138px minmax(0,1fr); }
+  .topology-view .left-stack { max-height: clamp(440px, calc(100vh - 265px), 560px); overflow-y: auto; }
+  .flow-wrap, .topology-canvas { height: clamp(440px, calc(100vh - 265px), 560px); min-height: 0; }.topology-alerts { padding-left: 10px; padding-right: 10px; }
+  .dashboard-overview { padding-left: 16px; padding-right: 16px; }.dashboard-stat-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .audit-workspace { max-width: 1180px; padding-left: 20px; padding-right: 20px; }
+}
+
+/* Surface and compact tablets: icon rail plus retained AI workspace. */
+@media (min-width: 761px) and (max-width: 1050px) {
+  .topbar { gap: 10px; }.brand { min-width: 170px; }.brand span, .user-name, .health { display: none; }
+  .project-picker { margin-right: auto; }.top-actions { margin-left: 0; }.top-actions .icon-action:nth-of-type(n+5), .account-trigger { display: none; }
+  .sidebar { padding: 12px 5px 70px; width: 62px; }.side-section-label, .nav-item span, .engine-status { display: none; }.nav-item { justify-content: center; min-height: 40px; padding: 8px 0; }.nav-item svg { height: 17px; width: 17px; }
+  .ai-side-panel { flex-basis: 268px; padding-left: 10px; padding-right: 10px; }.ai-side-title small, .ai-grounding { display: none; }
+  .main-stage { padding-right: 6px; }.content-grid.topology-view { gap: 6px; grid-template-columns: 124px minmax(0,1fr); padding-left: 6px; padding-right: 6px; }
+  .left-stack .panel-heading { padding-left: 7px; padding-right: 7px; }.layer-row, .legend-row { font-size: 11px; padding-left: 7px; padding-right: 7px; }
+  .stage-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }.toolbar-actions { justify-content: flex-start; max-width: 100%; width: 100%; }
+  .toolbar-actions button, .toolbar-actions select { min-height: 38px; }
+  .topology-view .left-stack { max-height: clamp(400px, calc(100vh - 405px), 560px); }
+  .flow-wrap, .topology-canvas { height: clamp(400px, calc(100vh - 405px), 560px); min-height: 0; }
+  .dashboard-detail-grid { grid-template-columns: 1fr; }.dashboard-stat-grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .topology-alerts { padding-bottom: 82px; }.alert-grid { grid-template-columns: 1fr; }
+  .audit-intake-grid { grid-template-columns: 1fr; }.audit-port-summary ul { columns: 1; }
+}
+
+@media (min-width: 761px) and (max-width: 900px) {
+  .workspace { flex-wrap: wrap; }
+  .main-stage { width: calc(100% - 62px); }
+  .ai-side-panel { flex-basis: auto; height: auto; margin-left: 62px; min-height: 480px; width: calc(100% - 62px); }
+}
+
+@media (pointer: coarse) {
+  .nav-item, .stage-tabs button, .stage-link, .toolbar-actions button, .toolbar-actions select, .layer-row, .legend-row { min-height: 40px; }
+  .icon-action, .panel-icon { min-height: 36px; min-width: 36px; }
+  .filter-pair select, .filter-pair button { min-height: 36px; }
+}
