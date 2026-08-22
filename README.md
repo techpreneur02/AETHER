@@ -11,6 +11,7 @@ Build a real SaaS platform that helps infrastructure teams:
 - create and manage technology assets with lifecycle context,
 - store topology and inventory data in a project-safe, organization-scoped model,
 - use AI grounded in the project topology to answer operational questions,
+- run controlled remote diagnostics and security-tool readiness checks from approved server-side runbooks,
 - export project records as JSON/PDF for handoff, review, and reporting.
 
 ## Project charter
@@ -36,13 +37,15 @@ In scope for this v1/v1.1 phase:
 - audit intake and readiness scoring,
 - AI context grounding based on project data,
 - import workflows for CSV/Nmap-like discovery data,
+- controlled remote operations for Linux VPS, Windows Server, and cPanel targets,
+- security tool catalog and guarded launch profiles for Nmap, Wireshark/tshark, tcpdump, Kali, Splunk, Nessus, and OpenVAS,
 - JSON/PDF export,
 - Docker-based deployment and Nginx-proxied VPS hosting.
 
 Out of scope for current phase:
 
 - full production identity and SSO,
-- live network scanning and autonomous device actions,
+- unrestricted shell access, autonomous exploitation, or unsupervised production device changes,
 - external monitoring telemetry feeds,
 - full compliance certification,
 - complete domain models for every asset class,
@@ -61,6 +64,7 @@ Out of scope for current phase:
 - AI answer endpoint grounded in saved project data
 - JSON and PDF export support
 - Docker Compose deployment configuration
+- Admin-gated remote operations and security-tool endpoints with fixed command catalogs, timeouts, output limits, and disabled-by-default security execution
 
 ### Frontend
 
@@ -71,7 +75,10 @@ Out of scope for current phase:
 - Device and link editing with medium and port assignment
 - Dedicated packet simulator for source/destination, protocol, destination port, disposition, latency, enforcement point, and hop tracing
 - Persistent right-side AI operations assistant with grounded current state, prioritized suggestions, allowlisted actions, and project chat
+- Dashboard frame controls for showing/hiding the left navigation and AI assistant, adjustable panel widths, and top-mounted VPS Engine status
 - Project audit page with readiness checks
+- Remote Operations page for bounded Linux VPS, Windows Server, and cPanel diagnostics
+- Security Tools page for Wireshark/tshark, Nmap, Kali, Splunk, Nessus, OpenVAS, and tcpdump readiness and guarded actions
 - Asset inventory views for cameras, racks, power, wireless, and cabling
 - Security, IP management, tasks, members, reports, and operations panels
 
@@ -104,7 +111,8 @@ Out of scope for current phase:
 6. Simulate logical packet reachability and security-policy outcomes across the recorded infrastructure.
 7. Run audit readiness checks.
 8. Ask grounded AI questions about the existing project context.
-9. Export the project as JSON or PDF for operations handoff.
+9. Use Remote Operations or Security Tools for approved diagnostics when server-side targets are configured.
+10. Export the project as JSON or PDF for operations handoff.
 
 ## Repository structure
 
@@ -163,12 +171,14 @@ AETHER-IT is functionally at an MVP-to-early-pilot stage. The system already sup
 - security/IP/task workflows,
 - audit readiness checks,
 - AI-grounded project assistance,
+- controlled remote diagnostics,
+- guarded security-tool catalog and launch profiles,
 - JSON/PDF export,
 - VPS deployment and backup operations.
 
 The core product direction is sound and the workflow is usable. The remaining work is focused on operational maturity: tighter domain models, more production-grade security controls, and more formal lifecycle workflows.
 
-The simulator currently models logical reachability over operational recorded links, link-medium latency, assigned endpoint IPs, port transitions, and ordered security rules enforced globally or at a traversed device. It does not yet emulate routing tables, VLAN/STP behavior, dynamic routing protocols, packet payloads, or vendor operating-system command execution.
+The simulator currently models logical reachability over operational recorded links, link-medium latency, assigned endpoint IPs, port transitions, and ordered security rules enforced globally or at a traversed device. It does not yet emulate routing tables, VLAN/STP behavior, dynamic routing protocols, or packet payloads. Remote and security-tool execution is intentionally limited to admin-gated, named, server-side diagnostics with configuration checks, timeouts, and output caps.
 
 ## Roadmap
 
@@ -179,6 +189,7 @@ The simulator currently models logical reachability over operational recorded li
 - add stronger validation and safer link editing rules,
 - add routing tables, VLANs, interface state, and per-device policy enforcement to simulation,
 - add formal audit history and change tracking.
+- add persistent execution history and per-project authorization scopes for remote operations and security tools.
 
 ### Medium-term
 
@@ -186,6 +197,7 @@ The simulator currently models logical reachability over operational recorded li
 - better backup replication and recovery checks,
 - stronger role and audit event controls,
 - dedicated reports and compliance summaries.
+- deeper Splunk, Nessus/OpenVAS, and monitoring integrations with server-side credential storage.
 
 ### Longer-term
 
