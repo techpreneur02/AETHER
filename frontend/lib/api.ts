@@ -18,6 +18,56 @@ export type Project = {
   organization_id: string;
   archived: boolean;
   created_at: string;
+  client_assessment?: ClientAssessment | null;
+  network_design?: NetworkDesign | null;
+};
+
+export type ClientAssessment = {
+  client_contact: string;
+  site_count: number;
+  user_count: number;
+  critical_services: string[];
+  internet_providers: string;
+  current_pain_points: string[];
+  security_controls: string[];
+  backup_status: "unknown" | "none" | "partial" | "tested";
+  documentation_quality: number;
+  resilience: number;
+  security: number;
+  scalability: number;
+  notes: string;
+};
+
+export type AssessmentEvaluation = {
+  score: number;
+  grade: "critical" | "at_risk" | "developing" | "managed" | "optimized";
+  strengths: string[];
+  gaps: string[];
+  recommendations: string[];
+};
+
+export type DesignRequirements = {
+  objectives: string[];
+  availability_target: "standard" | "high" | "mission_critical";
+  growth_percent: number;
+  remote_users: number;
+  wireless_scope: "none" | "office" | "campus" | "warehouse" | "hospitality";
+  preferred_vendors: string[];
+  compliance: string[];
+  cloud_services: string[];
+  segmentation_required: boolean;
+  budget_band: "essential" | "balanced" | "strategic";
+  constraints: string;
+};
+
+export type NetworkDesign = {
+  requirements: DesignRequirements;
+  architecture: string[];
+  topology_suggestions: string[];
+  recommendations: string[];
+  configurations: Record<string, string>;
+  ai_narrative: string;
+  ai_suggested: boolean;
 };
 
 export type Topology = {
@@ -247,6 +297,8 @@ export async function updateDevicePosition(token: string, projectId: string, dev
 
 export type ImportSummary = { imported: number; topology_nodes: number };
 
+export type UniversalImportSummary = ImportSummary & { source_format: string; skipped: number; warnings: string[] };
+
 export async function importDevices(token: string, projectId: string, file: File, format: "csv" | "nmap"): Promise<ImportSummary> {
   const form = new FormData();
   form.append("file", file);
@@ -259,6 +311,26 @@ export async function importDevices(token: string, projectId: string, file: File
     const detail = await response.json().catch(() => null);
     throw new Error(detail?.detail ?? `Unable to import ${format.toUpperCase()}`);
   }
+  return response.json();
+}
+
+export async function importInfrastructure(token: string, projectId: string, file: File): Promise<UniversalImportSummary> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${API_URL}/projects/${projectId}/import/auto`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+  if (!response.ok) { const detail = await response.json().catch(() => null); throw new Error(detail?.detail ?? "Unable to read infrastructure evidence"); }
+  return response.json();
+}
+
+export async function saveClientAssessment(token: string, projectId: string, payload: ClientAssessment): Promise<AssessmentEvaluation> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/assessment`, { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!response.ok) { const detail = await response.json().catch(() => null); throw new Error(detail?.detail ?? "Unable to save client assessment"); }
+  return response.json();
+}
+
+export async function generateNetworkDesign(token: string, projectId: string, payload: DesignRequirements): Promise<NetworkDesign> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/design`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!response.ok) { const detail = await response.json().catch(() => null); throw new Error(detail?.detail ?? "Unable to generate network design"); }
   return response.json();
 }
 

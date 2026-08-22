@@ -332,7 +332,7 @@ class MongoStore:
 
     @staticmethod
     def _project(document: dict[str, Any]) -> ProjectResponse:
-        return ProjectResponse(id=document["_id"], name=document["name"], description=document.get("description", ""), organization_id=document["organization_id"], archived=document.get("archived", False), created_at=document["created_at"], floorplan_path=document.get("floorplan_path"), floorplan_content_type=document.get("floorplan_content_type"))
+        return ProjectResponse(id=document["_id"], name=document["name"], description=document.get("description", ""), organization_id=document["organization_id"], archived=document.get("archived", False), created_at=document["created_at"], floorplan_path=document.get("floorplan_path"), floorplan_content_type=document.get("floorplan_content_type"), client_assessment=document.get("client_assessment"), network_design=document.get("network_design"))
 
     def find_user_by_email(self, email: str) -> StoredUser | None:
         document = self.users.find_one({"email": email})

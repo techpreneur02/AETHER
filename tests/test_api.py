@@ -105,6 +105,55 @@ def test_project_isolation_between_organizations() -> None:
     assert response.status_code == 404
 
 
+def test_client_assessment_is_scored_saved_and_project_scoped() -> None:
+    token = register("assessment@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Assessment Twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    payload = {
+        "client_contact": "IT Manager",
+        "site_count": 2,
+        "user_count": 180,
+        "critical_services": ["ERP", "VoIP"],
+        "current_pain_points": ["Single ISP", "Undocumented switching"],
+        "security_controls": ["MFA", "EDR"],
+        "backup_status": "partial",
+        "documentation_quality": 2,
+        "resilience": 2,
+        "security": 3,
+        "scalability": 2,
+    }
+
+    evaluated = client.put(f"/projects/{project['id']}/assessment", headers=headers, json=payload)
+    loaded = client.get(f"/projects/{project['id']}", headers=headers)
+    other_token = register("assessment-other@example.com")
+    isolated = client.put(f"/projects/{project['id']}/assessment", headers={"Authorization": f"Bearer {other_token}"}, json=payload)
+
+    assert evaluated.status_code == 200
+    assert evaluated.json()["grade"] == "at_risk"
+    assert evaluated.json()["gaps"]
+    assert loaded.json()["client_assessment"]["user_count"] == 180
+    assert isolated.status_code == 404
+
+
+def test_network_design_uses_requirements_and_saved_assessment() -> None:
+    token = register("design@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Design Twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    client.put(f"/projects/{project['id']}/assessment", headers=headers, json={"site_count": 1, "user_count": 75, "backup_status": "none", "documentation_quality": 2, "resilience": 2, "security": 2, "scalability": 3})
+
+    response = client.post(
+        f"/projects/{project['id']}/design",
+        headers=headers,
+        json={"objectives": ["Remove downtime", "Secure guest Wi-Fi"], "availability_target": "mission_critical", "growth_percent": 50, "wireless_scope": "office", "preferred_vendors": ["Cisco", "Fortinet"], "segmentation_required": True, "budget_band": "strategic"},
+    )
+    loaded = client.get(f"/projects/{project['id']}", headers=headers)
+
+    assert response.status_code == 200
+    assert "firewall HA" in response.json()["architecture"][0]
+    assert "vlan 50 guest" in response.json()["configurations"]["segmentation"]
+    assert loaded.json()["network_design"]["requirements"]["growth_percent"] == 50
+
+
 def test_topology_round_trip_is_scoped_to_project() -> None:
     token = register("topology@example.com")
     project = client.post(
@@ -520,6 +569,40 @@ def test_nmap_xml_import_adds_hosts() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"imported": 2, "topology_nodes": 2}
+
+
+def test_auto_import_detects_json_and_skips_duplicate_names() -> None:
+    token = register("auto-import@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Universal Import Twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    document = b'{"devices":[{"hostname":"core-01","vendor":"Cisco","model":"C9500"},{"name":"core-01"},{"name":"Server Cluster","kind":"service","manufacturer":"HPE"}]}'
+
+    response = client.post(
+        f"/projects/{project['id']}/import/auto",
+        headers=headers,
+        files={"file": ("inventory.json", document, "application/json")},
+    )
+    topology = client.get(f"/projects/{project['id']}/topology", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["source_format"] == "json"
+    assert response.json()["imported"] == 2
+    assert response.json()["skipped"] == 1
+    assert topology.json()["nodes"][0]["model"] == "C9500"
+
+
+def test_auto_import_rejects_unreadable_binary_evidence() -> None:
+    token = register("binary-import@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Binary Import Twin"}).json()
+
+    response = client.post(
+        f"/projects/{project['id']}/import/auto",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("inventory.xlsx", b"\xff\xfe\x00\x81", "application/octet-stream")},
+    )
+
+    assert response.status_code == 422
+    assert "Export it as CSV" in response.json()["detail"]
 
 
 def test_project_json_export_is_organization_scoped() -> None:

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import csv
 import io
+import json
 import os
 import xml.etree.ElementTree as ElementTree
 from pathlib import Path
@@ -19,7 +20,7 @@ from backend.models.topology import Topology, TopologyNode
 from backend.models.device import DeviceCreate, DeviceResponse
 from backend.models.link import LinkCreate
 from backend.models.position import PositionUpdate
-from backend.models.import_job import ImportSummary
+from backend.models.import_job import ImportSummary, UniversalImportSummary
 from backend.models.export import ProjectExport
 from backend.models.config import ConfigPreviewRequest, ConfigPreviewResponse
 from backend.models.ai import AIQueryRequest, AIQueryResponse, HelpdeskResponse
@@ -29,7 +30,8 @@ from backend.models.security_rule import SecurityRuleCreate, SecurityRuleRespons
 from backend.models.task import TaskCreate, TaskResponse
 from backend.models.asset import AssetCreate, AssetResponse
 from backend.models.simulation import PacketSimulationRequest, PacketSimulationResponse
-from backend.core.ai import answer_helpdesk_query, answer_query
+from backend.models.assessment import AssessmentEvaluation, ClientAssessment, DesignRequirements, NetworkDesign
+from backend.core.ai import add_ai_design_narrative, answer_helpdesk_query, answer_query
 from backend.core.config_generator import render_config
 from backend.core.pdf_export import render_as_built_pdf
 from backend.core.simulator import simulate_packet
@@ -144,6 +146,92 @@ def get_project(project_id: str, user: StoredUser = Depends(current_user)) -> Pr
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     return project
+
+
+def evaluate_assessment(assessment: ClientAssessment) -> AssessmentEvaluation:
+    maturity = assessment.documentation_quality + assessment.resilience + assessment.security + assessment.scalability
+    evidence = min(len(assessment.security_controls), 4) + (2 if assessment.backup_status == "tested" else 1 if assessment.backup_status == "partial" else 0)
+    score = min(100, round((maturity / 20) * 80 + (evidence / 6) * 20))
+    grade = "critical" if score < 30 else "at_risk" if score < 50 else "developing" if score < 70 else "managed" if score < 90 else "optimized"
+    strengths: list[str] = []
+    gaps: list[str] = []
+    recommendations: list[str] = []
+    dimensions = {
+        "Infrastructure documentation": assessment.documentation_quality,
+        "Service resilience": assessment.resilience,
+        "Security maturity": assessment.security,
+        "Growth readiness": assessment.scalability,
+    }
+    for label, value in dimensions.items():
+        (strengths if value >= 4 else gaps).append(f"{label}: {value}/5")
+    if assessment.backup_status != "tested":
+        gaps.append("Backups are not recorded as regularly tested")
+        recommendations.append("Implement monitored backups and complete a documented restoration test.")
+    if not assessment.security_controls:
+        gaps.append("No security controls were recorded")
+        recommendations.append("Document identity, firewall, endpoint, logging, and vulnerability controls.")
+    if assessment.documentation_quality < 4:
+        recommendations.append("Complete the device, link, port, IP, ownership, and dependency records in the digital twin.")
+    if assessment.resilience < 4:
+        recommendations.append("Remove single points of failure for internet, core switching, power, and critical services.")
+    if assessment.scalability < 4:
+        recommendations.append("Reserve addressing, switch capacity, wireless density, and uplink bandwidth for forecast growth.")
+    if not recommendations:
+        recommendations.append("Maintain quarterly evidence reviews and validate representative failover scenarios.")
+    return AssessmentEvaluation(score=score, grade=grade, strengths=strengths, gaps=gaps, recommendations=recommendations[:6])
+
+
+def build_network_design(requirements: DesignRequirements, assessment: ClientAssessment | None) -> NetworkDesign:
+    vendors = requirements.preferred_vendors or ["Multi-vendor"]
+    availability = {
+        "standard": "Single edge with protected configuration backups",
+        "high": "Dual WAN-ready edge and redundant core/distribution paths",
+        "mission_critical": "Diverse carriers, firewall HA, dual core, and redundant power domains",
+    }[requirements.availability_target]
+    architecture = [availability, "Layered edge, core/distribution, access, and service zones"]
+    if requirements.segmentation_required:
+        architecture.append("VLAN and policy segmentation for users, servers, voice, guest, IoT, cameras, and management")
+    if requirements.wireless_scope != "none":
+        architecture.append(f"Controller-managed {requirements.wireless_scope} wireless with capacity-based AP placement")
+    topology = ["Internet/SD-WAN -> security edge -> resilient core -> access switches -> endpoint and service zones"]
+    if requirements.cloud_services or requirements.remote_users:
+        topology.append("Identity-aware remote access and controlled cloud egress through the security edge")
+    recommendations = [
+        f"Design for {requirements.growth_percent}% growth without replacing the core platform.",
+        f"Use {', '.join(vendors)} standards with documented lifecycle and support ownership.",
+        "Validate application flows, failover, monitoring, backup, and rollback before handover.",
+    ]
+    if assessment:
+        recommendations.extend(evaluate_assessment(assessment).recommendations[:3])
+    vlan_lines = ["10 management", "20 corporate-users", "30 servers", "40 voice", "50 guest", "60 iot-cameras"] if requirements.segmentation_required else ["10 business-lan"]
+    configurations = {
+        "baseline": "\n".join(["hostname <site-role-id>", "ntp server <trusted-ntp>", "logging host <syslog-ip>", "aaa authentication centralized", "snmpv3 enable", "disable unused services"]),
+        "segmentation": "\n".join(f"vlan {line}" for line in vlan_lines),
+        "edge_policy": "default deny inbound\nallow established sessions\nallow required published services only\nlog denied traffic\nrestrict management to management VLAN",
+    }
+    narrative = f"Recommended {requirements.budget_band} design for {requirements.availability_target.replace('_', ' ')} availability, using {', '.join(vendors)} where practical."
+    return NetworkDesign(requirements=requirements, architecture=architecture, topology_suggestions=topology, recommendations=recommendations[:8], configurations=configurations, ai_narrative=narrative)
+
+
+@app.put("/projects/{project_id}/assessment", response_model=AssessmentEvaluation)
+def save_client_assessment(project_id: str, payload: ClientAssessment, user: StoredUser = Depends(editor_user)) -> AssessmentEvaluation:
+    project = store.get_project(project_id, user.organization_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    project.client_assessment = payload
+    store.update_project(project)
+    return evaluate_assessment(payload)
+
+
+@app.post("/projects/{project_id}/design", response_model=NetworkDesign)
+async def generate_network_design(project_id: str, payload: DesignRequirements, user: StoredUser = Depends(editor_user)) -> NetworkDesign:
+    project = store.get_project(project_id, user.organization_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    design = await add_ai_design_narrative(build_network_design(payload, project.client_assessment), project.client_assessment)
+    project.network_design = design
+    store.update_project(project)
+    return design
 
 
 @app.get("/projects/{project_id}/topology", response_model=Topology, response_model_exclude_none=True)
@@ -440,6 +528,90 @@ def update_device_position(project_id: str, device_id: str, payload: PositionUpd
     device.floorplan_y = payload.floorplan_y
     store.save_topology(project_id, user.organization_id, topology)
     return topology
+
+
+def normalize_inventory_row(row: dict[str, Any]) -> tuple[str, str, str | None, str | None]:
+    lowered = {str(key).strip().lower(): value for key, value in row.items()}
+    name = str(lowered.get("name") or lowered.get("hostname") or lowered.get("device") or lowered.get("asset") or lowered.get("ip") or lowered.get("address") or "").strip()
+    kind = str(lowered.get("kind") or lowered.get("type") or lowered.get("category") or "device").strip().lower()
+    kind = kind if kind in {"device", "site", "service"} else "device"
+    vendor = str(lowered.get("vendor") or lowered.get("manufacturer") or "").strip() or None
+    model = str(lowered.get("model") or lowered.get("product") or "").strip() or None
+    return name, kind, vendor, model
+
+
+def parse_universal_inventory(filename: str, content: bytes) -> tuple[str, list[tuple[str, str, str | None, str | None]], list[str]]:
+    suffix = Path(filename).suffix.lower()
+    warnings: list[str] = []
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError("This binary file cannot be read as inventory evidence. Export it as CSV, JSON, XML, or plain text first.") from error
+    rows: list[dict[str, Any]] = []
+    source_format = suffix.lstrip(".") or "text"
+    if suffix == ".json" or text.lstrip().startswith(("[", "{")):
+        source_format = "json"
+        document = json.loads(text)
+        if isinstance(document, dict):
+            document = document.get("devices") or document.get("nodes") or document.get("assets") or document.get("inventory") or [document]
+        if not isinstance(document, list):
+            raise ValueError("JSON inventory must be a list or contain devices, nodes, assets, or inventory")
+        rows = [item for item in document if isinstance(item, dict)]
+    elif suffix == ".xml" or text.lstrip().startswith("<"):
+        source_format = "xml"
+        root = ElementTree.fromstring(content)
+        for element in root.findall(".//host") + root.findall(".//device") + root.findall(".//asset") + root.findall(".//node"):
+            hostname = element.find("./hostnames/hostname")
+            address = element.find("./address")
+            rows.append({
+                "name": element.get("name") or (hostname.get("name") if hostname is not None else None) or (address.get("addr") if address is not None else None) or element.findtext("name") or element.findtext("hostname") or element.findtext("address"),
+                "kind": element.get("kind") or element.findtext("kind") or element.findtext("type"),
+                "vendor": element.get("vendor") or element.findtext("vendor") or element.findtext("manufacturer"),
+                "model": element.get("model") or element.findtext("model"),
+            })
+    elif suffix == ".csv" or ("," in text.splitlines()[0] if text.splitlines() else False):
+        source_format = "csv"
+        rows = list(csv.DictReader(io.StringIO(text)))
+    else:
+        source_format = "text"
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", ";", "//")):
+                continue
+            parts = [part.strip() for part in stripped.replace("|", ",").split(",")]
+            rows.append({"name": parts[0], "kind": parts[1] if len(parts) > 1 else "device", "vendor": parts[2] if len(parts) > 2 else None, "model": parts[3] if len(parts) > 3 else None})
+        warnings.append("Plain text was interpreted as one asset per line: name, kind, vendor, model.")
+    normalized = [normalize_inventory_row(row) for row in rows]
+    normalized = [row for row in normalized if row[0]]
+    if not normalized:
+        raise ValueError("No recognizable infrastructure records were found in this file")
+    return source_format, normalized, warnings
+
+
+@app.post("/projects/{project_id}/import/auto", response_model=UniversalImportSummary)
+async def import_infrastructure_auto(project_id: str, file: UploadFile = File(...), user: StoredUser = Depends(editor_user)) -> UniversalImportSummary:
+    if store.get_project(project_id, user.organization_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Infrastructure evidence must be 10 MB or smaller")
+    try:
+        source_format, records, warnings = parse_universal_inventory(file.filename or "inventory.txt", content)
+    except (ValueError, json.JSONDecodeError, ElementTree.ParseError) as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    topology = store.get_topology(project_id, user.organization_id) or Topology()
+    known_names = {node.name.strip().casefold() for node in topology.nodes}
+    imported = 0
+    skipped = 0
+    for name, kind, vendor, model in records:
+        if name.casefold() in known_names:
+            skipped += 1
+            continue
+        topology.nodes.append(TopologyNode(id=str(uuid4()), name=name, kind=kind, vendor=vendor, model=model))  # type: ignore[arg-type]
+        known_names.add(name.casefold())
+        imported += 1
+    store.save_topology(project_id, user.organization_id, topology)
+    return UniversalImportSummary(imported=imported, skipped=skipped, topology_nodes=len(topology.nodes), source_format=source_format, warnings=warnings)
 
 
 @app.post("/projects/{project_id}/import/csv", response_model=ImportSummary)

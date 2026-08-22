@@ -4,6 +4,7 @@ import os
 import time
 
 from backend.models.ai import AIQueryResponse, HelpdeskResponse
+from backend.models.assessment import ClientAssessment, NetworkDesign
 from backend.models.topology import Topology
 
 
@@ -137,3 +138,27 @@ async def answer_query(query: str, topology: Topology, ip_allocation_count: int 
     )
     _cache[cache_key] = (time.time() + AI_CACHE_TTL_SECONDS, result)
     return result
+
+
+async def add_ai_design_narrative(design: NetworkDesign, assessment: ClientAssessment | None) -> NetworkDesign:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return design
+    from google import genai
+
+    prompt = (
+        "You are a senior multi-vendor network architect. Review the supplied client requirements, assessment, and deterministic engineer proposal. "
+        "Return one concise paragraph identifying the design rationale, major tradeoff, and highest-priority validation. "
+        "Do not invent products, prices, topology facts, or compliance guarantees. Do not output configuration commands.\n\n"
+        f"REQUIREMENTS\n{design.requirements.model_dump_json()}\n\n"
+        f"ASSESSMENT\n{assessment.model_dump_json() if assessment else 'not completed'}\n\n"
+        f"ENGINEER PROPOSAL\n{design.model_dump_json()}"
+    )
+    try:
+        client = genai.Client(api_key=api_key)
+        response = await asyncio.to_thread(client.models.generate_content, model="gemini-3-flash-preview", contents=prompt)
+        if response.text:
+            return design.model_copy(update={"ai_narrative": response.text.strip(), "ai_suggested": True})
+    except Exception:
+        return design
+    return design

@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.models.assessment import ClientAssessment, NetworkDesign
+
 
 class ProjectCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -19,3 +21,5 @@ class ProjectResponse(ProjectCreate):
     created_at: datetime
     floorplan_path: str | None = None
     floorplan_content_type: str | None = None
+    client_assessment: ClientAssessment | None = None
+    network_design: NetworkDesign | None = None
