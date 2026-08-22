@@ -492,9 +492,13 @@ export default function Home() {
   const [alertTab, setAlertTab] = useState<"alerts" | "tasks" | "logs">(
     "alerts",
   );
-  const [showTerminal, setShowTerminal] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTopPanel, setActiveTopPanel] = useState<"health" | "search" | "terminal" | "notifications" | "settings" | "account" | null>(null);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [notifications, setNotifications] = useState([
+    "Critical · Disk usage is above 90%",
+    "Warning · PoE power usage above 80%",
+    "Info · Firmware update available",
+  ]);
   const [compactMode, setCompactMode] = useState(false);
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("AETHER-IT project console ready.");
@@ -524,6 +528,15 @@ export default function Home() {
     document.documentElement.dataset.theme = nextTheme;
     window.localStorage.setItem("aether_theme", nextTheme);
     setTheme(nextTheme);
+  }
+
+  function toggleTopPanel(panel: NonNullable<typeof activeTopPanel>) {
+    setActiveTopPanel((current) => current === panel ? null : panel);
+  }
+
+  function signOut() {
+    window.localStorage.removeItem("aether_access_token");
+    window.location.assign("/login");
   }
 
   useEffect(() => {
@@ -1257,6 +1270,41 @@ export default function Home() {
   const isolatedDeviceCount = (topology?.nodes ?? []).filter(
     (node) => !connectedDeviceIds.has(node.id),
   ).length;
+
+  function runTerminalCommand(command: string) {
+    const normalized = command.trim().toLowerCase();
+    if (!normalized) {
+      setTerminalOutput("Enter help to list available commands.");
+      return;
+    }
+    if (normalized === "clear") {
+      setTerminalOutput("");
+      return;
+    }
+    if (normalized === "help") {
+      setTerminalOutput("Available commands: help, status, devices, links, simulator, clear");
+      return;
+    }
+    if (normalized === "status") {
+      setTerminalOutput(`Engine: ${isLive ? "online" : "paused"}\nProject: ${activeProject}\nAPI sync: ${projectLoadError || topologyLoadError ? "attention required" : "connected"}`);
+      return;
+    }
+    if (normalized === "devices") {
+      setTerminalOutput(`${topology?.nodes.length ?? 0} devices recorded\n${isolatedDeviceCount} isolated devices`);
+      return;
+    }
+    if (normalized === "links") {
+      setTerminalOutput(`${topology?.links.length ?? 0} links recorded\n${downLinkCount} links down`);
+      return;
+    }
+    if (normalized === "simulator") {
+      setActiveStage("SIMULATOR");
+      setActiveTopPanel(null);
+      setTerminalOutput("Simulator opened.");
+      return;
+    }
+    setTerminalOutput(`Unknown command: ${command.trim()}\nEnter help to list available commands.`);
+  }
   const liveCurrentState = [
     `${topology?.nodes.length ?? 0} devices and ${topology?.links.length ?? 0} recorded links`,
     `${downLinkCount} links down and ${isolatedDeviceCount} isolated devices`,
@@ -1281,9 +1329,16 @@ export default function Home() {
         { id: "open_simulator", label: "Run packet trace", description: "Validate reachability and policy." },
         { id: "open_security", label: "Review security", description: "Inspect enforcement rules." },
       ];
+  const searchQuery = globalSearch.trim().toLowerCase();
+  const matchingDevices = searchQuery ? (topology?.nodes ?? fallbackTopology.nodes).filter((node) =>
+    [node.name, node.vendor, node.model, node.kind].filter(Boolean).some((value) => value?.toLowerCase().includes(searchQuery)),
+  ).slice(0, 6) : [];
+  const matchingModules = searchQuery ? Object.entries(navigationRoutes).filter(([label]) =>
+    label.toLowerCase().includes(searchQuery),
+  ).slice(0, 5) : [];
 
   return (
-    <main className="console-shell">
+    <main className={`console-shell ${compactMode ? "compact-console" : ""}`}>
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark">
@@ -1313,9 +1368,15 @@ export default function Home() {
           <ChevronDown size={14} />
         </label>
         <div className="top-actions">
-          <div className="health">
+          <button
+            className={`health ${activeTopPanel === "health" ? "active" : ""}`}
+            title="System health details"
+            aria-label="System health details"
+            aria-expanded={activeTopPanel === "health"}
+            onClick={() => toggleTopPanel("health")}
+          >
             <span className="pulse" /> SYSTEM HEALTH <b>100%</b>
-          </div>
+          </button>
           <button
             className="icon-action theme-toggle"
             title={`Use ${theme === "light" ? "dark" : "light"} theme`}
@@ -1325,48 +1386,61 @@ export default function Home() {
             {theme === "light" ? <Moon size={17} /> : <Sun size={17} />}
           </button>
           <button
-            className="icon-action"
+            className={`icon-action ${activeTopPanel === "search" ? "active" : ""}`}
             title="Search"
-            onClick={() => document.getElementById("device-search")?.focus()}
+            aria-label="Search devices and modules"
+            aria-expanded={activeTopPanel === "search"}
+            onClick={() => toggleTopPanel("search")}
           >
             <Search size={18} />
           </button>
           <button
-            className="icon-action"
+            className={`icon-action ${activeTopPanel === "terminal" ? "active" : ""}`}
             title="Terminal"
-            onClick={() => setShowTerminal((current) => !current)}
+            aria-label="Project terminal"
+            aria-expanded={activeTopPanel === "terminal"}
+            onClick={() => toggleTopPanel("terminal")}
           >
             <SquareTerminal size={18} />
           </button>
           <button
-            className="notification icon-action"
+            className={`notification icon-action ${activeTopPanel === "notifications" ? "active" : ""}`}
             title="Notifications"
-            onClick={() => setShowNotifications((current) => !current)}
+            aria-label={`${notifications.length} notifications`}
+            aria-expanded={activeTopPanel === "notifications"}
+            onClick={() => toggleTopPanel("notifications")}
           >
             <Bell size={18} />
-            <i>3</i>
+            {notifications.length > 0 && <i>{notifications.length}</i>}
           </button>
           <button
-            className="icon-action"
+            className={`icon-action ${activeTopPanel === "settings" ? "active" : ""}`}
             title="Settings"
-            onClick={() => setShowSettings((current) => !current)}
+            aria-label="Console settings"
+            aria-expanded={activeTopPanel === "settings"}
+            onClick={() => toggleTopPanel("settings")}
           >
             <Settings size={18} />
           </button>
           <button
-            className="avatar"
+            className={`account-trigger ${activeTopPanel === "account" ? "active" : ""}`}
             title="Account"
-            onClick={() => window.location.assign("/members")}
+            aria-label="Account menu"
+            aria-expanded={activeTopPanel === "account"}
+            onClick={() => toggleTopPanel("account")}
           >
-            SA
+            <span className="avatar">SA</span>
+            <span className="user-name">Sherwin Armas</span>
+            <ChevronDown size={13} />
           </button>
-          <span className="user-name">Sherwin Armas</span>
-          <ChevronDown size={13} />
         </div>
       </header>
-      {showTerminal && <section className="ops-popover terminal-popover"><div className="panel-heading"><b>PROJECT TERMINAL</b><button className="panel-icon" onClick={() => setShowTerminal(false)}><X size={13} /></button></div><form onSubmit={(event) => { event.preventDefault(); setTerminalOutput(terminalCommand.trim() ? `Command queued for project review: ${terminalCommand.trim()}` : "Enter a project command to continue."); setTerminalCommand(""); }}><input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Describe a safe project action..." /><button>Run</button></form><pre>{terminalOutput}</pre></section>}
-      {showNotifications && <section className="ops-popover notifications-popover"><div className="panel-heading"><b>NOTIFICATIONS</b><button className="panel-icon" onClick={() => setShowNotifications(false)}><X size={13} /></button></div><button onClick={() => setControlMessage("Disk usage alert acknowledged")}>Critical · Disk usage is above 90%</button><button onClick={() => setControlMessage("PoE alert acknowledged")}>Warning · PoE power usage above 80%</button><button onClick={() => setControlMessage("Firmware reminder acknowledged")}>Info · Firmware update available</button></section>}
-      {showSettings && <section className="ops-popover settings-popover"><div className="panel-heading"><b>CONSOLE SETTINGS</b><button className="panel-icon" onClick={() => setShowSettings(false)}><X size={13} /></button></div><label><input type="checkbox" checked={compactMode} onChange={(event) => setCompactMode(event.target.checked)} /> Compact operations layout</label><a href="/config">Open configuration workspace</a></section>}
+      {activeTopPanel === "health" && <section className="ops-popover health-popover"><div className="panel-heading"><b>SYSTEM HEALTH</b><button className="panel-icon" aria-label="Close health details" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div><div className="health-metrics"><div><span>VPS engine</span><b className="healthy">{isLive ? "Online" : "Paused"}</b></div><div><span>API synchronization</span><b className={projectLoadError || topologyLoadError ? "attention" : "healthy"}>{projectLoadError || topologyLoadError ? "Attention" : "Connected"}</b></div><div><span>Devices / links</span><b>{topology?.nodes.length ?? 0} / {topology?.links.length ?? 0}</b></div><div><span>Down / isolated</span><b>{downLinkCount} / {isolatedDeviceCount}</b></div></div></section>}
+      {activeTopPanel === "search" && <section className="ops-popover global-search-popover"><div className="panel-heading"><b>GLOBAL SEARCH</b><button className="panel-icon" aria-label="Close search" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div><label className="global-search-field"><Search size={14} /><input autoFocus value={globalSearch} onChange={(event) => setGlobalSearch(event.target.value)} placeholder="Search devices or modules..." /></label><div className="global-search-results">{!searchQuery && <span>Start typing to search this project.</span>}{matchingDevices.map((node) => <button key={node.id} onClick={() => { setSelectedNode(node.id); setActiveStage("DEVICE DETAILS"); setActiveNav("Topology"); setActiveTopPanel(null); }}><Server size={14} /><div><b>{node.name}</b><small>{[node.vendor, node.model].filter(Boolean).join(" · ") || node.kind}</small></div></button>)}{matchingModules.map(([label, route]) => <button key={label} onClick={() => window.location.assign(route)}><Layers3 size={14} /><div><b>{label}</b><small>Open workspace</small></div></button>)}{searchQuery && !matchingDevices.length && !matchingModules.length && <span>No matching devices or modules.</span>}</div></section>}
+      {activeTopPanel === "terminal" && <section className="ops-popover terminal-popover"><div className="panel-heading"><b>PROJECT TERMINAL</b><button className="panel-icon" aria-label="Close terminal" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div><form onSubmit={(event) => { event.preventDefault(); runTerminalCommand(terminalCommand); setTerminalCommand(""); }}><input autoFocus value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} placeholder="Enter help for commands..." /><button>Run</button></form><pre>{terminalOutput}</pre></section>}
+      {activeTopPanel === "notifications" && <section className="ops-popover notifications-popover"><div className="panel-heading"><b>NOTIFICATIONS</b><button className="panel-icon" aria-label="Close notifications" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div>{notifications.length ? notifications.map((notification) => <button key={notification} onClick={() => { setNotifications((current) => current.filter((item) => item !== notification)); setControlMessage(`${notification} acknowledged`); }}>{notification}<small>Acknowledge</small></button>) : <div className="popover-empty"><Check size={15} /> All caught up</div>}</section>}
+      {activeTopPanel === "settings" && <section className="ops-popover settings-popover"><div className="panel-heading"><b>CONSOLE SETTINGS</b><button className="panel-icon" aria-label="Close settings" onClick={() => setActiveTopPanel(null)}><X size={13} /></button></div><label><input type="checkbox" checked={compactMode} onChange={(event) => setCompactMode(event.target.checked)} /> Compact operations layout</label><button onClick={toggleTheme}>{theme === "light" ? "Switch to dark theme" : "Switch to light theme"}</button><a href="/config">Open configuration workspace</a></section>}
+      {activeTopPanel === "account" && <section className="ops-popover account-popover"><div className="account-summary"><span className="avatar">SA</span><div><b>Sherwin Armas</b><small>Administrator</small></div></div><a href="/members">Manage members</a><a href="/knowledge-base">Open knowledge base</a><button className="sign-out-action" onClick={signOut}>Sign out</button></section>}
       <div className="workspace">
         <aside className="sidebar">
           <div className="side-section-label">OPERATIONS</div>
