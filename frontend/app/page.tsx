@@ -2347,21 +2347,23 @@ export default function Home() {
                     </button>
                     <button className={alertTab === "logs" ? "active" : ""} onClick={() => setAlertTab("logs")}>LOGS</button>
                   </div>
-                  {alertTab === "alerts" && [
-                    ["Critical", "Disk usage is above 90%"],
-                    ["Warning", "PoE power usage above 80%"],
-                    ["Info", "Firmware update available"],
-                  ].map(([severity, message]) => (
-                    <div className="alert-row" key={message}>
-                      <span className={`severity ${severity.toLowerCase()}`}>
-                        {severity}
-                      </span>
-                      <span>10:24 AM</span>
-                      <b>{message}</b>
-                    </div>
-                  ))}
-                  {alertTab === "tasks" && <div className="alert-row"><span className="severity warning">TASKS</span><span>{topology?.nodes.length ?? 0} assets</span><b>Review project work queue</b></div>}
-                  {alertTab === "logs" && <div className="alert-row"><span className="severity info">LOG</span><span>Live</span><b>Topology synchronized with project API</b></div>}
+                  <div className="alert-grid">
+                    {alertTab === "alerts" && [
+                      ["Critical", "Disk usage is above 90%"],
+                      ["Warning", "PoE power usage above 80%"],
+                      ["Info", "Firmware update available"],
+                    ].map(([severity, message]) => (
+                      <div className="alert-row" key={message}>
+                        <span className={`severity ${severity.toLowerCase()}`}>
+                          {severity}
+                        </span>
+                        <span>10:24 AM</span>
+                        <b>{message}</b>
+                      </div>
+                    ))}
+                    {alertTab === "tasks" && <div className="alert-row"><span className="severity warning">TASKS</span><span>{topology?.nodes.length ?? 0} assets</span><b>Review project work queue</b></div>}
+                    {alertTab === "logs" && <div className="alert-row"><span className="severity info">LOG</span><span>Live</span><b>Topology synchronized with project API</b></div>}
+                  </div>
                 </div>
               </div>}
             </>

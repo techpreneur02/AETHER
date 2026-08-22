@@ -191,7 +191,7 @@ export default function InfrastructureAuditPage() {
   );
 
   return (
-    <main className="imports-shell">
+    <main className="imports-shell audit-shell">
       <header className="floorplan-header">
         <a href="/">
           <ArrowLeft size={16} /> Console
@@ -209,14 +209,14 @@ export default function InfrastructureAuditPage() {
           <span className="pulse" /> VPS CONNECTED
         </span>
       </header>
-      <section className="imports-workspace">
+      <section className="imports-workspace audit-workspace">
         <span className="eyebrow">OPERATIONS / INFRASTRUCTURE AUDIT</span>
         <h1>Find gaps before they become incidents.</h1>
         <p>
           Audit evidence is calculated from the selected project&apos;s
           persisted operational data.
         </p>
-        <section className="import-card panel">
+        <section className="import-card panel audit-main-card">
           <label>
             Project
             <select
