@@ -63,7 +63,10 @@ import {
   type Project,
   type Topology,
 } from "../lib/api";
-import TopologyFlow from "../components/TopologyFlow";
+import TopologyFlow, {
+  TOPOLOGY_CANVAS_HEIGHT,
+  TOPOLOGY_CANVAS_WIDTH,
+} from "../components/TopologyFlow";
 
 const navigation = [
   ["Dashboard", Gauge],
@@ -871,8 +874,8 @@ export default function Home() {
     try {
       setTopology(
         await updateDevicePosition(token, activeProjectId, node.id, {
-          floorplan_x: Math.max(0, Math.min(1, node.position.x / 1000)),
-          floorplan_y: Math.max(0, Math.min(1, node.position.y / 700)),
+          floorplan_x: Math.max(0, Math.min(1, node.position.x / TOPOLOGY_CANVAS_WIDTH)),
+          floorplan_y: Math.max(0, Math.min(1, node.position.y / TOPOLOGY_CANVAS_HEIGHT)),
         }),
       );
     } catch (error) {

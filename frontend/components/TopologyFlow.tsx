@@ -8,6 +8,9 @@ import type { Topology } from "../lib/api";
 type TopologyFlowProps = { topology: Topology; selectedNodeId?: string; onNodeClick?: (nodeId: string) => void; onConnect?: (connection: Connection) => void; onNodeDragStop?: (node: Node) => void; onEdgeClick?: (edgeId: string) => void; fitViewTrigger?: number };
 type DeviceNodeData = { label: string; vendor: string; model: string; portCount: number; kind: string; ports: string[]; category: string };
 
+export const TOPOLOGY_CANVAS_WIDTH = 1600;
+export const TOPOLOGY_CANVAS_HEIGHT = 900;
+
 function defaultPortLabels(portCount: number): string[] {
   return Array.from({ length: Math.max(1, portCount || 4) }, (_, index) => {
     const portNumber = index + 1;
@@ -79,8 +82,8 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
                   : "device";
 
         const position = {
-          x: node.floorplan_x != null ? node.floorplan_x * 900 : (index % 3) * 220 + 80,
-          y: node.floorplan_y != null ? node.floorplan_y * 600 : Math.floor(index / 3) * 150 + 80,
+          x: node.floorplan_x != null ? node.floorplan_x * TOPOLOGY_CANVAS_WIDTH : (index % 3) * 220 + 80,
+          y: node.floorplan_y != null ? node.floorplan_y * TOPOLOGY_CANVAS_HEIGHT : Math.floor(index / 3) * 150 + 80,
         };
 
         return {
