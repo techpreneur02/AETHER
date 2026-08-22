@@ -1769,33 +1769,54 @@ export default function Home() {
                       {selectedDevice && (
                         <div className="detail-message">
                           <b>Edit device metadata</b>
-                          <input value={detailVendor} onChange={(event) => setDetailVendor(event.target.value)} placeholder="Vendor" />
-                          <input value={detailModel} onChange={(event) => setDetailModel(event.target.value)} placeholder="Model" />
-                          <input type="number" min={1} max={96} value={detailPortCount} onChange={(event) => setDetailPortCount(Number(event.target.value) || 1)} placeholder="Port count" />
+                          <label className="detail-field">
+                            <span>Vendor</span>
+                            <input value={detailVendor} onChange={(event) => setDetailVendor(event.target.value)} placeholder="e.g. HP" />
+                          </label>
+                          <label className="detail-field">
+                            <span>Model</span>
+                            <input value={detailModel} onChange={(event) => setDetailModel(event.target.value)} placeholder="e.g. LaserJet" />
+                          </label>
+                          <label className="detail-field">
+                            <span>Total ports</span>
+                            <input type="number" min={1} max={96} value={detailPortCount} onChange={(event) => setDetailPortCount(Number(event.target.value) || 1)} placeholder="e.g. 24" />
+                          </label>
                           <button type="button" className="save-detail-button" onClick={saveSelectedDevice}>Save device</button>
                         </div>
                       )}
                       {selectedDevice && (
                         <div className="detail-message">
                           <b>Connection assignment</b>
-                          <select value={deviceAssignTarget} onChange={(event) => setDeviceAssignTarget(event.target.value)}>
-                            <option value="">Attach to another node</option>
-                            {assignableNodes.map((node) => (
-                              <option key={node.id} value={node.id}>{node.name}</option>
-                            ))}
-                          </select>
-                          <select value={deviceAssignMedium} onChange={(event) => setDeviceAssignMedium(event.target.value as typeof deviceAssignMedium)}>
-                            <option value="ethernet">Ethernet</option>
-                            <option value="fiber">Fiber</option>
-                            <option value="wireless">Wireless</option>
-                          </select>
-                          <select value={deviceAssignSourcePort} onChange={(event) => setDeviceAssignSourcePort(event.target.value)}>
-                            <option value="">Selected device port</option>
-                            {selectedDevicePortOptions.map((port) => (
-                              <option key={port} value={port}>{port}</option>
-                            ))}
-                          </select>
-                          <input aria-label="Connected device port" value={deviceAssignTargetPort} onChange={(event) => setDeviceAssignTargetPort(event.target.value)} placeholder="Connected device port" />
+                          <label className="detail-field">
+                            <span>Connected device</span>
+                            <select value={deviceAssignTarget} onChange={(event) => setDeviceAssignTarget(event.target.value)}>
+                              <option value="">Attach to another node</option>
+                              {assignableNodes.map((node) => (
+                                <option key={node.id} value={node.id}>{node.name}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="detail-field">
+                            <span>Connection medium</span>
+                            <select value={deviceAssignMedium} onChange={(event) => setDeviceAssignMedium(event.target.value as typeof deviceAssignMedium)}>
+                              <option value="ethernet">Ethernet</option>
+                              <option value="fiber">Fiber</option>
+                              <option value="wireless">Wireless</option>
+                            </select>
+                          </label>
+                          <label className="detail-field">
+                            <span>Selected device port</span>
+                            <select value={deviceAssignSourcePort} onChange={(event) => setDeviceAssignSourcePort(event.target.value)}>
+                              <option value="">Choose a port</option>
+                              {selectedDevicePortOptions.map((port) => (
+                                <option key={port} value={port}>{port}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="detail-field">
+                            <span>Connected device port</span>
+                            <input value={deviceAssignTargetPort} onChange={(event) => setDeviceAssignTargetPort(event.target.value)} placeholder="e.g. Gi1/0/24" />
+                          </label>
                           <button type="button" onClick={assignDeviceToTarget}>
                             {selectedDeviceLinks.some(
                               (link) =>
