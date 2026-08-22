@@ -8,8 +8,8 @@ import type { Topology } from "../lib/api";
 type TopologyFlowProps = { topology: Topology; selectedNodeId?: string; onNodeClick?: (nodeId: string) => void; onConnect?: (connection: Connection) => void; onNodeDragStop?: (node: Node) => void; onEdgeClick?: (edgeId: string) => void; fitViewTrigger?: number };
 type DeviceNodeData = { label: string; vendor: string; model: string; portCount: number; kind: string; ports: string[]; category: string };
 
-export const TOPOLOGY_CANVAS_WIDTH = 1600;
-export const TOPOLOGY_CANVAS_HEIGHT = 900;
+export const TOPOLOGY_CANVAS_WIDTH = 3200;
+export const TOPOLOGY_CANVAS_HEIGHT = 1400;
 
 function defaultPortLabels(portCount: number): string[] {
   return Array.from({ length: Math.max(1, portCount || 4) }, (_, index) => {
