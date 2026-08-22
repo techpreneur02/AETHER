@@ -117,9 +117,9 @@ export default function TopologyFlow({ topology, selectedNodeId, onNodeClick, on
       sourceHandle: "bottom",
       targetHandle: "top",
       type: "step",
-      label: `${link.medium} · ${link.source_port || "Unassigned"} → ${link.target_port || "Unassigned"}`,
-      animated: link.medium === "wireless",
-      style: { stroke: link.medium === "fiber" ? "#49c9df" : link.medium === "wireless" ? "#b27ef2" : "#8ba4b5", strokeWidth: 2 },
+      label: `${link.medium} · ${link.source_port || "Unassigned"} → ${link.target_port || "Unassigned"}${link.operational_status === "down" ? " · DOWN" : ""}`,
+      animated: link.medium === "wireless" && link.operational_status !== "down",
+      style: { stroke: link.operational_status === "down" ? "#f05a67" : link.medium === "fiber" ? "#49c9df" : link.medium === "wireless" ? "#b27ef2" : "#8ba4b5", strokeWidth: 2, strokeDasharray: link.operational_status === "down" ? "7 5" : undefined },
       labelStyle: { fill: "#d9e6f2", fontSize: 10 },
     };
   });

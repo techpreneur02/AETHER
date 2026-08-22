@@ -12,6 +12,7 @@ class SecurityRuleCreate(BaseModel):
     source: str = Field(min_length=1, max_length=64)
     destination: str = Field(min_length=1, max_length=64)
     port: str = Field(default="any", max_length=32)
+    device_id: str | None = None
 
 
 class SecurityRuleResponse(SecurityRuleCreate):

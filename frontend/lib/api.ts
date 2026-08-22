@@ -22,7 +22,7 @@ export type Project = {
 
 export type Topology = {
   nodes: { id: string; name: string; kind: "device" | "site" | "service"; vendor?: string | null; model?: string | null; port_count?: number | null; floorplan_x?: number; floorplan_y?: number }[];
-  links: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port?: string | null; target_port?: string | null }[];
+  links: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port?: string | null; target_port?: string | null; operational_status?: "up" | "down" }[];
 };
 
 export type ConfigPreview = {
@@ -38,6 +38,33 @@ export type AIQueryResponse = {
   grounded_node_count: number;
   grounded_link_count: number;
   cached: boolean;
+  current_state: string[];
+  suggestions: string[];
+  actions: { id: string; label: string; description: string }[];
+};
+
+export type PacketSimulation = {
+  reachable: boolean;
+  disposition: "delivered" | "blocked" | "unreachable";
+  reason: string;
+  protocol: "tcp" | "udp" | "icmp";
+  port: number | null;
+  source_ip: string | null;
+  target_ip: string | null;
+  total_latency_ms: number;
+  matched_rule_id: string | null;
+  matched_rule_name: string | null;
+  enforcement_device_id: string | null;
+  enforcement_device_name: string | null;
+  hops: {
+    device_id: string;
+    name: string;
+    vendor: string | null;
+    model: string | null;
+    ip_address: string | null;
+    ingress_port: string | null;
+    egress_port: string | null;
+  }[];
 };
 
 export type Membership = {
@@ -63,6 +90,7 @@ export type SecurityRule = {
   source: string;
   destination: string;
   port: string;
+  device_id: string | null;
 };
 
 export type ProjectTask = {
@@ -163,7 +191,7 @@ export async function updateDevice(token: string, projectId: string, deviceId: s
   return response.json();
 }
 
-export async function createLink(token: string, projectId: string, payload: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port: string; target_port: string }): Promise<Topology> {
+export async function createLink(token: string, projectId: string, payload: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port: string; target_port: string; operational_status?: "up" | "down" }): Promise<Topology> {
   const response = await fetch(`${API_URL}/projects/${projectId}/links`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -173,8 +201,8 @@ export async function createLink(token: string, projectId: string, payload: { so
   return response.json();
 }
 
-export async function updateLink(token: string, projectId: string, source: string, target: string, payload: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port: string; target_port: string }): Promise<Topology> {
-  const response = await fetch(`${API_URL}/projects/${projectId}/links/${source}/${target}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ source: payload.source, target: payload.target, medium: payload.medium, source_port: payload.source_port, target_port: payload.target_port }) });
+export async function updateLink(token: string, projectId: string, source: string, target: string, payload: { source: string; target: string; medium: "fiber" | "ethernet" | "wireless"; source_port: string; target_port: string; operational_status?: "up" | "down" }): Promise<Topology> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/links/${source}/${target}`, { method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   if (!response.ok) throw new Error("Unable to update link");
   return response.json();
 }
@@ -263,6 +291,28 @@ export async function queryProjectAI(token: string, projectId: string, query: st
   return response.json();
 }
 
+export async function simulatePacket(
+  token: string,
+  projectId: string,
+  payload: {
+    source_device_id: string;
+    target_device_id: string;
+    protocol: "tcp" | "udp" | "icmp";
+    port: number | null;
+  },
+): Promise<PacketSimulation> {
+  const response = await fetch(`${API_URL}/projects/${projectId}/simulate/packet`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? "Unable to run packet simulation");
+  }
+  return response.json();
+}
+
 export async function listMembers(token: string): Promise<Membership[]> {
   const response = await fetch(`${API_URL}/organization/members`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error("Unable to load organization members");
@@ -320,7 +370,7 @@ export async function listSecurityRules(token: string, projectId: string): Promi
   return response.json();
 }
 
-export async function createSecurityRule(token: string, projectId: string, payload: Omit<SecurityRule, "id">): Promise<SecurityRule> {
+export async function createSecurityRule(token: string, projectId: string, payload: Omit<SecurityRule, "id" | "device_id"> & { device_id?: string | null }): Promise<SecurityRule> {
   const response = await fetch(`${API_URL}/projects/${projectId}/security-rules`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   if (!response.ok) { const detail = await response.json().catch(() => null); throw new Error(detail?.detail ?? "Unable to create security rule"); }
   return response.json();

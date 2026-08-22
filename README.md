@@ -30,6 +30,7 @@ In scope for this v1/v1.1 phase:
 - user authentication and role-based access,
 - organization and project isolation,
 - device, link, and topology workflows,
+- multi-vendor logical packet path and security-policy simulation,
 - IP allocation and security rules,
 - distributed tasks and operational records,
 - audit intake and readiness scoring,
@@ -56,6 +57,7 @@ Out of scope for current phase:
 - MongoDB-backed production persistence with SQLite fallback for local development and test stability
 - Persistent store abstraction layer for memory, SQLite, and Mongo
 - Topology and graph operations for node creation, edit, movement, link creation, and deletion
+- Stateless NetworkX packet path simulation with weighted media latency, operational link state, port-aware hops, IP context, and device-scoped security-rule evaluation
 - AI answer endpoint grounded in saved project data
 - JSON and PDF export support
 - Docker Compose deployment configuration
@@ -67,6 +69,8 @@ Out of scope for current phase:
 - Device catalog and topology editor
 - Node drag, grid snapping, keyboard movement, and handle-based connection creation
 - Device and link editing with medium and port assignment
+- Dedicated packet simulator for source/destination, protocol, destination port, disposition, latency, enforcement point, and hop tracing
+- Persistent right-side AI operations assistant with grounded current state, prioritized suggestions, allowlisted actions, and project chat
 - Project audit page with readiness checks
 - Asset inventory views for cameras, racks, power, wireless, and cabling
 - Security, IP management, tasks, members, reports, and operations panels
@@ -97,9 +101,10 @@ Out of scope for current phase:
 3. Build or import topology data.
 4. Assign connections, media type, and port assignments.
 5. Review topology, IP data, security rules, and task state.
-6. Run audit readiness checks.
-7. Ask grounded AI questions about the existing project context.
-8. Export the project as JSON or PDF for operations handoff.
+6. Simulate logical packet reachability and security-policy outcomes across the recorded infrastructure.
+7. Run audit readiness checks.
+8. Ask grounded AI questions about the existing project context.
+9. Export the project as JSON or PDF for operations handoff.
 
 ## Repository structure
 
@@ -153,6 +158,7 @@ AETHER-IT is functionally at an MVP-to-early-pilot stage. The system already sup
 - project and org-scoped records,
 - topology and device modeling,
 - connection editing with port awareness,
+- logical packet traces with multi-vendor hop details and ACL outcomes,
 - import data handling,
 - security/IP/task workflows,
 - audit readiness checks,
@@ -162,6 +168,8 @@ AETHER-IT is functionally at an MVP-to-early-pilot stage. The system already sup
 
 The core product direction is sound and the workflow is usable. The remaining work is focused on operational maturity: tighter domain models, more production-grade security controls, and more formal lifecycle workflows.
 
+The simulator currently models logical reachability over operational recorded links, link-medium latency, assigned endpoint IPs, port transitions, and ordered security rules enforced globally or at a traversed device. It does not yet emulate routing tables, VLAN/STP behavior, dynamic routing protocols, packet payloads, or vendor operating-system command execution.
+
 ## Roadmap
 
 ### Near-term
@@ -169,6 +177,7 @@ The core product direction is sound and the workflow is usable. The remaining wo
 - complete domain-specific asset models for racks, wireless, cameras, power, and cabling,
 - improve audit evidence and scoring logic,
 - add stronger validation and safer link editing rules,
+- add routing tables, VLANs, interface state, and per-device policy enforcement to simulation,
 - add formal audit history and change tracking.
 
 ### Medium-term

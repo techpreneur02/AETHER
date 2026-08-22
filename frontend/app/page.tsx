@@ -56,9 +56,11 @@ import {
   listProjects,
   queryProjectAI,
   saveTopology,
+  simulatePacket,
   updateDevicePosition,
   type AIQueryResponse,
   type IPAllocation,
+  type PacketSimulation,
   type Project,
   type Topology,
 } from "../lib/api";
@@ -442,6 +444,7 @@ export default function Home() {
   const [linkMedium, setLinkMedium] = useState<
     "fiber" | "ethernet" | "wireless"
   >("ethernet");
+  const [linkOperationalStatus, setLinkOperationalStatus] = useState<"up" | "down">("up");
   const [linkSaving, setLinkSaving] = useState(false);
   const [linkSourcePort, setLinkSourcePort] = useState("");
   const [linkTargetPort, setLinkTargetPort] = useState("");
@@ -497,6 +500,13 @@ export default function Home() {
   const [siteFilter, setSiteFilter] = useState<"all" | "sites">("all");
   const [legendFilter, setLegendFilter] = useState("all");
   const [viewRefreshToken, setViewRefreshToken] = useState(0);
+  const [simulationSource, setSimulationSource] = useState("");
+  const [simulationTarget, setSimulationTarget] = useState("");
+  const [simulationProtocol, setSimulationProtocol] = useState<"tcp" | "udp" | "icmp">("icmp");
+  const [simulationPort, setSimulationPort] = useState("");
+  const [simulationResult, setSimulationResult] = useState<PacketSimulation | null>(null);
+  const [simulationRunning, setSimulationRunning] = useState(false);
+  const [simulationError, setSimulationError] = useState("");
 
   useEffect(() => {
     const token = window.localStorage.getItem("aether_access_token");
@@ -859,6 +869,7 @@ export default function Home() {
           medium: linkMedium,
           source_port: linkSourcePort.trim(),
           target_port: linkTargetPort.trim(),
+          operational_status: "up",
         }),
       );
       setShowLinkForm(false);
@@ -915,6 +926,7 @@ export default function Home() {
     setLinkSource(selectedLink.source);
     setLinkTarget(selectedLink.target);
     setLinkMedium(selectedLink.medium);
+    setLinkOperationalStatus(selectedLink.operational_status ?? "up");
     setLinkSourcePort(selectedLink.source_port ?? "");
     setLinkTargetPort(selectedLink.target_port ?? "");
   }, [selectedLink]);
@@ -932,6 +944,7 @@ export default function Home() {
     setLinkSource(link.source);
     setLinkTarget(link.target);
     setLinkMedium(link.medium);
+    setLinkOperationalStatus(link.operational_status ?? "up");
     setLinkSourcePort(link.source_port ?? "");
     setLinkTargetPort(link.target_port ?? "");
   }
@@ -972,6 +985,7 @@ export default function Home() {
         medium: linkMedium,
         source_port: linkSourcePort.trim(),
         target_port: linkTargetPort.trim(),
+        operational_status: linkOperationalStatus,
       }));
       setSelectedLink(null);
       setSelectedLinkOrigin(null);
@@ -1025,6 +1039,7 @@ export default function Home() {
             medium: deviceAssignMedium,
             source_port: existingLink.source === selectedNode ? localPort : remotePort,
             target_port: existingLink.target === selectedNode ? localPort : remotePort,
+            operational_status: existingLink.operational_status ?? "up",
           })
         : await createLink(token, activeProjectId, {
             source: selectedNode,
@@ -1032,6 +1047,7 @@ export default function Home() {
             medium: deviceAssignMedium,
             source_port: localPort,
             target_port: remotePort,
+            operational_status: "up",
           });
       setTopology(nextTopology);
       setControlMessage(existingLink ? "Connection assignment updated" : "Device assignment created");
@@ -1172,6 +1188,81 @@ export default function Home() {
       setAiLoading(false);
     }
   }
+
+  async function runPacketSimulation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const token = window.localStorage.getItem("aether_access_token");
+    if (!token || !activeProjectId || !simulationSource || !simulationTarget) return;
+    setSimulationRunning(true);
+    setSimulationError("");
+    try {
+      setSimulationResult(await simulatePacket(token, activeProjectId, {
+        source_device_id: simulationSource,
+        target_device_id: simulationTarget,
+        protocol: simulationProtocol,
+        port: simulationProtocol === "icmp" || !simulationPort ? null : Number(simulationPort),
+      }));
+    } catch (error) {
+      setSimulationResult(null);
+      setSimulationError(error instanceof Error ? error.message : "Packet simulation failed");
+    } finally {
+      setSimulationRunning(false);
+    }
+  }
+
+  function runAIAction(actionId: string) {
+    if (actionId === "open_simulator") {
+      setActiveStage("SIMULATOR");
+      setActiveNav("Topology");
+      return;
+    }
+    if (actionId === "open_topology") {
+      setActiveStage("TOPOLOGY");
+      setActiveNav("Topology");
+      return;
+    }
+    if (actionId === "open_ipam") {
+      window.location.assign("/ip-management");
+      return;
+    }
+    if (actionId === "open_security") {
+      window.location.assign("/security");
+    }
+  }
+
+  const connectedDeviceIds = new Set(
+    (topology?.links ?? []).flatMap((link) => [link.source, link.target]),
+  );
+  const downLinkCount = (topology?.links ?? []).filter(
+    (link) => link.operational_status === "down",
+  ).length;
+  const isolatedDeviceCount = (topology?.nodes ?? []).filter(
+    (node) => !connectedDeviceIds.has(node.id),
+  ).length;
+  const liveCurrentState = [
+    `${topology?.nodes.length ?? 0} devices and ${topology?.links.length ?? 0} recorded links`,
+    `${downLinkCount} links down and ${isolatedDeviceCount} isolated devices`,
+    `${ipAllocations.length} assigned IP addresses`,
+  ];
+  const visibleCurrentState = aiResponse?.current_state.length
+    ? aiResponse.current_state
+    : liveCurrentState;
+  const visibleSuggestions = aiResponse?.suggestions.length
+    ? aiResponse.suggestions
+    : [
+        downLinkCount
+          ? "Restore or document down links before validating application flows."
+          : "Run representative packet traces against the intended design.",
+        isolatedDeviceCount
+          ? "Connect isolated devices or document their standalone role."
+          : "Review recorded ports and addresses for audit completeness.",
+      ];
+  const visibleActions = aiResponse?.actions.length
+    ? aiResponse.actions
+    : [
+        { id: "open_simulator", label: "Run packet trace", description: "Validate reachability and policy." },
+        { id: "open_security", label: "Review security", description: "Inspect enforcement rules." },
+      ];
 
   return (
     <main className="console-shell">
@@ -1314,6 +1405,12 @@ export default function Home() {
             >
               <PanelRight size={14} /> DEVICE DETAILS
             </button>
+            <button
+              className={activeStage === "SIMULATOR" ? "selected" : ""}
+              onClick={() => setActiveStage("SIMULATOR")}
+            >
+              <Activity size={14} /> SIMULATOR
+            </button>
             <a className="stage-link" href="/floorplans">
               <Layers3 size={14} /> FLOORPLANS
             </a>
@@ -1345,7 +1442,7 @@ export default function Home() {
               <FileCheck2 size={14} /> PDF
             </button>
           </div>
-          {!['TOPOLOGY', 'DEVICE DETAILS'].includes(activeStage) ? (
+          {!['TOPOLOGY', 'DEVICE DETAILS', 'SIMULATOR'].includes(activeStage) ? (
             <div className="module-placeholder panel">
               <Cpu size={34} />
               <h2>
@@ -1370,11 +1467,13 @@ export default function Home() {
               <div className="stage-toolbar">
                 <div>
                   <span className="eyebrow">
-                    {activeStage === "TOPOLOGY" ? "TOPOLOGY / LIVE MAP" : "ASSET / DEVICE DETAILS"}
+                    {activeStage === "TOPOLOGY" ? "TOPOLOGY / LIVE MAP" : activeStage === "SIMULATOR" ? "SIMULATION / PACKET TRACE" : "ASSET / DEVICE DETAILS"}
                   </span>
-                  <h1>{activeStage === "TOPOLOGY" ? "Infrastructure topology" : selectedDevice?.name ?? "Device details"}</h1>
+                  <h1>{activeStage === "TOPOLOGY" ? "Infrastructure topology" : activeStage === "SIMULATOR" ? "Multi-vendor packet simulator" : selectedDevice?.name ?? "Device details"}</h1>
                   <span className="topology-summary">
-                    {activeStage === "DEVICE DETAILS"
+                    {activeStage === "SIMULATOR"
+                      ? "Trace reachability, ports, latency, and security policy"
+                      : activeStage === "DEVICE DETAILS"
                       ? "Metadata, ports, addressing, and connection assignment"
                       : topologyLoadError
                       ? "Topology unavailable"
@@ -1398,6 +1497,10 @@ export default function Home() {
                         <Network size={14} /> Back to topology
                       </button>
                     </>
+                  ) : activeStage === "SIMULATOR" ? (
+                    <button onClick={() => setActiveStage("TOPOLOGY")}>
+                      <Network size={14} /> Back to topology
+                    </button>
                   ) : (
                     <>
                   <button onClick={() => setIsLive(!isLive)}>
@@ -1567,6 +1670,10 @@ export default function Home() {
                     <option value="fiber">Fiber</option>
                     <option value="wireless">Wireless</option>
                   </select>
+                  <select aria-label="Connection status" value={linkOperationalStatus} onChange={(event) => setLinkOperationalStatus(event.target.value as typeof linkOperationalStatus)}>
+                    <option value="up">Operational</option>
+                    <option value="down">Down / disabled</option>
+                  </select>
                   <input aria-label="Source port" placeholder="Source port" value={linkSourcePort} onChange={(event) => setLinkSourcePort(event.target.value)} />
                   <input aria-label="Target port" placeholder="Target port" value={linkTargetPort} onChange={(event) => setLinkTargetPort(event.target.value)} />
                   <button type="button" onClick={saveSelectedLink}>Save connection</button>
@@ -1579,7 +1686,70 @@ export default function Home() {
                   }}>Close</button>
                 </div>
               )}
-              <div className={`content-grid ${activeStage === "DEVICE DETAILS" ? "device-details-view" : "topology-view"}`}>
+              {activeStage === "SIMULATOR" && (
+                <section className="simulator-workspace">
+                  <form className="simulator-controls panel" onSubmit={runPacketSimulation}>
+                    <div className="panel-heading"><b>PACKET PARAMETERS</b></div>
+                    <label className="detail-field">
+                      <span>Source device</span>
+                      <select required value={simulationSource} onChange={(event) => setSimulationSource(event.target.value)}>
+                        <option value="">Choose source</option>
+                        {(topology?.nodes ?? []).map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
+                      </select>
+                    </label>
+                    <label className="detail-field">
+                      <span>Destination device</span>
+                      <select required value={simulationTarget} onChange={(event) => setSimulationTarget(event.target.value)}>
+                        <option value="">Choose destination</option>
+                        {(topology?.nodes ?? []).filter((node) => node.id !== simulationSource).map((node) => <option key={node.id} value={node.id}>{node.name}</option>)}
+                      </select>
+                    </label>
+                    <label className="detail-field">
+                      <span>Protocol</span>
+                      <select value={simulationProtocol} onChange={(event) => setSimulationProtocol(event.target.value as typeof simulationProtocol)}>
+                        <option value="icmp">ICMP</option>
+                        <option value="tcp">TCP</option>
+                        <option value="udp">UDP</option>
+                      </select>
+                    </label>
+                    {simulationProtocol !== "icmp" && (
+                      <label className="detail-field">
+                        <span>Destination port</span>
+                        <input required type="number" min={1} max={65535} value={simulationPort} onChange={(event) => setSimulationPort(event.target.value)} placeholder="e.g. 443" />
+                      </label>
+                    )}
+                    <button className="simulation-run" disabled={simulationRunning || !simulationSource || !simulationTarget}>
+                      <Activity size={15} /> {simulationRunning ? "Tracing..." : "Run packet trace"}
+                    </button>
+                    {simulationError && <p className="simulation-error">{simulationError}</p>}
+                  </form>
+                  <div className="simulation-results panel">
+                    <div className="panel-heading"><b>TRACE RESULT</b></div>
+                    {!simulationResult ? (
+                      <div className="simulation-empty"><Activity size={28} /><span>Select endpoints and run a trace.</span></div>
+                    ) : (
+                      <>
+                        <div className={`simulation-verdict ${simulationResult.disposition}`}>
+                          <strong>{simulationResult.disposition.toUpperCase()}</strong>
+                          <span>{simulationResult.reason}</span>
+                          <small>{simulationResult.protocol.toUpperCase()}{simulationResult.port ? `/${simulationResult.port}` : ""} · {simulationResult.total_latency_ms} ms</small>
+                        </div>
+                        {simulationResult.matched_rule_name && <div className="matched-rule"><ShieldCheck size={14} /> Policy: {simulationResult.matched_rule_name}{simulationResult.enforcement_device_name ? ` · enforced at ${simulationResult.enforcement_device_name}` : " · global"}</div>}
+                        <div className="simulation-hops">
+                          {simulationResult.hops.map((hop, index) => (
+                            <div className="simulation-hop" key={hop.device_id}>
+                              <span className="hop-index">{index + 1}</span>
+                              <div><b>{hop.name}</b><small>{[hop.vendor, hop.model].filter(Boolean).join(" · ") || "Generic device"}</small></div>
+                              <div><span>{hop.ip_address ?? "No IP"}</span><small>{hop.ingress_port ?? "Origin"} → {hop.egress_port ?? "Destination"}</small></div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </section>
+              )}
+              <div className={`content-grid ${activeStage === "SIMULATOR" ? "simulator-hidden" : activeStage === "DEVICE DETAILS" ? "device-details-view" : "topology-view"}`}>
                 <div className="left-stack">
                   <div className="layers-panel panel">
                     <div className="panel-heading">
@@ -1965,7 +2135,7 @@ export default function Home() {
                         >
                           <span className="online-dot" />
                           {link.source} to {link.target}
-                          <small>{link.medium}</small>
+                          <small>{link.medium} · {link.operational_status ?? "up"}</small>
                           <button
                             type="button"
                             className="panel-icon"
@@ -2020,35 +2190,71 @@ export default function Home() {
               {controlMessage}
             </div>
           )}
-          <form className="ai-command" onSubmit={submitAIQuery}>
-            <Sparkles size={15} />
-            <input
+        </section>
+        <aside className="ai-side-panel" aria-label="AI operations assistant">
+          <div className="ai-side-header">
+            <div className="ai-side-title">
+              <span className="ai-orbit"><Sparkles size={16} /></span>
+              <div><b>AETHER AI</b><small>Project operations assistant</small></div>
+            </div>
+            <span className="ai-grounding"><span className="pulse" /> GROUNDED</span>
+          </div>
+
+          <section className="ai-insight-section">
+            <div className="ai-section-title"><Activity size={14} /><b>CURRENT STATE</b></div>
+            <div className="ai-state-grid">
+              {visibleCurrentState.map((item, index) => (
+                <div className="ai-state-row" key={item}><span>{index + 1}</span><p>{item}</p></div>
+              ))}
+            </div>
+          </section>
+
+          <section className="ai-insight-section">
+            <div className="ai-section-title"><Lightbulb size={14} /><b>SUGGESTIONS</b></div>
+            <div className="ai-suggestion-list">
+              {visibleSuggestions.map((suggestion) => <p key={suggestion}>{suggestion}</p>)}
+            </div>
+          </section>
+
+          {aiResponse && (
+            <section className="ai-answer">
+              <span>AI RESPONSE</span>
+              <p>{aiResponse.answer}</p>
+              <small>{aiResponse.grounded_node_count} nodes · {aiResponse.grounded_link_count} links · {aiResponse.cached ? "cached" : "fresh"}</small>
+            </section>
+          )}
+
+          <section className="ai-insight-section ai-actions-section">
+            <div className="ai-section-title"><Zap size={14} /><b>ACTIONS</b></div>
+            <div className="ai-action-list">
+              {visibleActions.map((action) => (
+                <button key={action.id} type="button" onClick={() => runAIAction(action.id)}>
+                  <span><b>{action.label}</b><small>{action.description}</small></span>
+                  <ChevronDown size={14} />
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <div className="ai-quick-prompts">
+            {["What needs attention?", "Assess current risk", "What should I do next?"].map((prompt) => (
+              <button key={prompt} type="button" onClick={() => setAiQuery(prompt)}>{prompt}</button>
+            ))}
+          </div>
+          <form className="ai-side-command" onSubmit={submitAIQuery}>
+            <textarea
               id="ai-command"
               value={aiQuery}
               onChange={(event) => setAiQuery(event.target.value)}
-              placeholder="Ask the project AI... ( / )"
+              placeholder="Ask about this project..."
+              rows={3}
             />
-            <button disabled={aiLoading || !activeProjectId}>
-              {aiLoading ? "Thinking..." : "Ask"}
+            <button disabled={aiLoading || !activeProjectId || !aiQuery.trim()}>
+              <Sparkles size={14} /> {aiLoading ? "Analyzing..." : "Ask AETHER"}
             </button>
           </form>
-          {aiError && <p className="ai-error">{aiError}</p>}
-          {aiResponse && (
-            <div className="ai-response panel">
-              <div>
-                <span className="ai-badge">
-                  <Sparkles size={11} /> AI SUGGESTED
-                </span>
-                <small>
-                  Grounded in {aiResponse.grounded_node_count} nodes /{" "}
-                  {aiResponse.grounded_link_count} links ·{" "}
-                  {aiResponse.cached ? "cached response" : "fresh response"}
-                </small>
-              </div>
-              <p>{aiResponse.answer}</p>
-            </div>
-          )}
-        </section>
+          {aiError && <p className="ai-side-error">{aiError}</p>}
+        </aside>
       </div>
       <footer className="statusbar">
         <span>

@@ -28,9 +28,11 @@ from backend.models.ip_allocation import IPAllocationCreate, IPAllocationRespons
 from backend.models.security_rule import SecurityRuleCreate, SecurityRuleResponse
 from backend.models.task import TaskCreate, TaskResponse
 from backend.models.asset import AssetCreate, AssetResponse
+from backend.models.simulation import PacketSimulationRequest, PacketSimulationResponse
 from backend.core.ai import answer_query
 from backend.core.config_generator import render_config
 from backend.core.pdf_export import render_as_built_pdf
+from backend.core.simulator import simulate_packet
 
 
 store: Store = create_store()
@@ -189,6 +191,23 @@ def get_dashboard(project_id: str, user: StoredUser = Depends(current_user)) -> 
     }
 
 
+@app.post("/projects/{project_id}/simulate/packet", response_model=PacketSimulationResponse)
+def simulate_project_packet(
+    project_id: str,
+    payload: PacketSimulationRequest,
+    user: StoredUser = Depends(current_user),
+) -> PacketSimulationResponse:
+    if store.get_project(project_id, user.organization_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    topology = store.get_topology(project_id, user.organization_id) or Topology()
+    return simulate_packet(
+        topology,
+        store.list_ip_allocations(project_id, user.organization_id),
+        store.list_security_rules(project_id, user.organization_id),
+        payload,
+    )
+
+
 @app.post("/projects/{project_id}/devices", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
 def create_device(project_id: str, payload: DeviceCreate, user: StoredUser = Depends(editor_user)) -> DeviceResponse:
     topology = store.get_topology(project_id, user.organization_id) or Topology()
@@ -289,6 +308,7 @@ def update_link(project_id: str, source: str, target: str, payload: LinkCreate, 
     link.medium = payload.medium
     link.source_port = payload.source_port
     link.target_port = payload.target_port
+    link.operational_status = payload.operational_status
     store.save_topology(project_id, user.organization_id, topology)
     return topology
 
@@ -331,8 +351,11 @@ def list_security_rules(project_id: str, user: StoredUser = Depends(current_user
 def create_security_rule(project_id: str, payload: SecurityRuleCreate, user: StoredUser = Depends(editor_user)) -> SecurityRuleResponse:
     if store.get_project(project_id, user.organization_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    topology = store.get_topology(project_id, user.organization_id) or Topology()
+    if payload.device_id and not any(node.id == payload.device_id for node in topology.nodes):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Enforcement device must belong to the project topology")
     for existing in store.list_security_rules(project_id, user.organization_id):
-        if (existing.source, existing.destination, existing.protocol, existing.port) == (payload.source, payload.destination, payload.protocol, payload.port):
+        if (existing.source, existing.destination, existing.protocol, existing.port, existing.device_id) == (payload.source, payload.destination, payload.protocol, payload.port, payload.device_id):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An equivalent rule already exists")
     rule = SecurityRuleResponse(id=str(uuid4()), **payload.model_dump())
     store.save_security_rule(project_id, user.organization_id, rule)
@@ -506,7 +529,12 @@ async def query_project_ai(project_id: str, payload: AIQueryRequest, user: Store
     if store.get_project(project_id, user.organization_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     topology = store.get_topology(project_id, user.organization_id) or Topology()
-    return await answer_query(payload.query, topology)
+    return await answer_query(
+        payload.query,
+        topology,
+        len(store.list_ip_allocations(project_id, user.organization_id)),
+        len(store.list_security_rules(project_id, user.organization_id)),
+    )
 
 
 @app.post("/projects/{project_id}/floorplan", response_model=ProjectResponse)

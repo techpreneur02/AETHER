@@ -24,6 +24,7 @@ class TopologyLink(BaseModel):
     medium: Literal["fiber", "ethernet", "wireless"]
     source_port: str | None = None
     target_port: str | None = None
+    operational_status: Literal["up", "down"] = "up"
 
 
 class Topology(BaseModel):

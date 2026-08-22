@@ -11,3 +11,4 @@ class LinkCreate(BaseModel):
     medium: Literal["fiber", "ethernet", "wireless"]
     source_port: str = Field(min_length=1)
     target_port: str = Field(min_length=1)
+    operational_status: Literal["up", "down"] = "up"

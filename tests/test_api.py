@@ -209,7 +209,7 @@ def test_link_update_persists_port_details() -> None:
     updated = client.patch(
         f"/projects/{project['id']}/links/{first['id']}/{second['id']}",
         headers=headers,
-        json={"source": first["id"], "target": second["id"], "medium": "fiber", "source_port": "Eth1/1", "target_port": "Eth1/2"},
+        json={"source": first["id"], "target": second["id"], "medium": "fiber", "source_port": "Eth1/1", "target_port": "Eth1/2", "operational_status": "down"},
     )
     loaded = client.get(f"/projects/{project['id']}/topology", headers=headers)
 
@@ -218,6 +218,7 @@ def test_link_update_persists_port_details() -> None:
     assert updated.json()["links"][0]["medium"] == "fiber"
     assert updated.json()["links"][0]["source_port"] == "Eth1/1"
     assert loaded.json()["links"][0]["target_port"] == "Eth1/2"
+    assert loaded.json()["links"][0]["operational_status"] == "down"
 
 
 def test_link_update_can_reassign_endpoints_and_ports() -> None:
@@ -316,6 +317,89 @@ def test_security_rule_crud_is_scoped_and_rejects_equivalent_rules() -> None:
     assert listed.json()[0]["name"] == "Block inbound SSH"
     assert deleted.status_code == 204
     assert isolated.status_code == 404
+
+
+def test_security_rule_enforcement_device_must_belong_to_project() -> None:
+    token = register("security-device@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Scoped policy twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    firewall = client.post(
+        f"/projects/{project['id']}/devices",
+        headers=headers,
+        json={"name": "Edge firewall", "kind": "device"},
+    ).json()
+    payload = {
+        "name": "Firewall SSH deny",
+        "action": "deny",
+        "protocol": "tcp",
+        "source": "any",
+        "destination": "10.0.50.0/24",
+        "port": "22",
+    }
+
+    created = client.post(
+        f"/projects/{project['id']}/security-rules",
+        headers=headers,
+        json={**payload, "device_id": firewall["id"]},
+    )
+    invalid = client.post(
+        f"/projects/{project['id']}/security-rules",
+        headers=headers,
+        json={**payload, "device_id": "other-project-firewall"},
+    )
+
+    assert created.status_code == 201
+    assert created.json()["device_id"] == firewall["id"]
+    assert invalid.status_code == 422
+
+
+def test_packet_simulation_endpoint_is_project_scoped() -> None:
+    token = register("simulation@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Simulation Twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    source = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Client", "kind": "device", "vendor": "Dell"}).json()
+    target = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Server", "kind": "service", "vendor": "HPE"}).json()
+    client.post(
+        f"/projects/{project['id']}/links",
+        headers=headers,
+        json={"source": source["id"], "target": target["id"], "medium": "ethernet", "source_port": "Eth0", "target_port": "NIC1"},
+    )
+
+    simulated = client.post(
+        f"/projects/{project['id']}/simulate/packet",
+        headers=headers,
+        json={"source_device_id": source["id"], "target_device_id": target["id"], "protocol": "tcp", "port": 443},
+    )
+    other_token = register("simulation-other@example.com")
+    isolated = client.post(
+        f"/projects/{project['id']}/simulate/packet",
+        headers={"Authorization": f"Bearer {other_token}"},
+        json={"source_device_id": source["id"], "target_device_id": target["id"], "protocol": "icmp"},
+    )
+
+    assert simulated.status_code == 200
+    assert simulated.json()["disposition"] == "delivered"
+    assert [hop["name"] for hop in simulated.json()["hops"]] == ["Client", "Server"]
+    assert isolated.status_code == 404
+
+
+def test_packet_simulation_endpoint_reports_unreachable_devices() -> None:
+    token = register("simulation-unreachable@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Isolated Devices"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+    source = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Client"}).json()
+    target = client.post(f"/projects/{project['id']}/devices", headers=headers, json={"name": "Server"}).json()
+
+    simulated = client.post(
+        f"/projects/{project['id']}/simulate/packet",
+        headers=headers,
+        json={"source_device_id": source["id"], "target_device_id": target["id"], "protocol": "icmp"},
+    )
+
+    assert simulated.status_code == 200
+    assert simulated.json()["disposition"] == "unreachable"
+    assert simulated.json()["reachable"] is False
+    assert simulated.json()["hops"] == []
 
 
 def test_task_lifecycle_is_scoped_to_project() -> None:
