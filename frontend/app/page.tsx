@@ -503,6 +503,7 @@ export default function Home() {
   const [terminalCommand, setTerminalCommand] = useState("");
   const [terminalOutput, setTerminalOutput] = useState("AETHER-IT project console ready.");
   const [canvasMode, setCanvasMode] = useState<"map" | "focus">("map");
+  const [showMiniMap, setShowMiniMap] = useState(false);
   const [statusFilter, setStatusFilter] = useState<"all" | "online">("all");
   const [siteFilter, setSiteFilter] = useState<"all" | "sites">("all");
   const [legendFilter, setLegendFilter] = useState("all");
@@ -1647,6 +1648,14 @@ export default function Home() {
                   <button onClick={resetView}>
                     <Eye size={14} /> View
                   </button>
+                  <button
+                    className={showMiniMap ? "selected" : ""}
+                    aria-pressed={showMiniMap}
+                    title={showMiniMap ? "Hide topology overview map" : "Show topology overview map"}
+                    onClick={() => setShowMiniMap((current) => !current)}
+                  >
+                    <Network size={14} /> {showMiniMap ? "Hide map" : "Show map"}
+                  </button>
                     </>
                   )}
                 </div>
@@ -1982,6 +1991,7 @@ export default function Home() {
                     onNodeDragStop={persistNodePosition}
                     onEdgeClick={selectTopologyEdge}
                     fitViewTrigger={viewRefreshToken}
+                    showMiniMap={showMiniMap}
                   />
                 </div>
                 <aside className="details panel">
