@@ -1854,6 +1854,15 @@ export default function Home() {
                           <span className="online-dot" />
                           {link.source} to {link.target}
                           <small>{link.medium}</small>
+                          <button
+                            type="button"
+                            className="panel-icon"
+                            title="Edit connection"
+                            aria-label={`Edit ${link.source} to ${link.target} connection`}
+                            onClick={() => selectTopologyEdge(`edge-${link.source}-${link.target}`)}
+                          >
+                            <Settings size={12} />
+                          </button>
                         </div>
                       ))}
                   </div>
