@@ -1,0 +1,17 @@
+# Network validation plan for {{ hostname }}
+# Approved management endpoint: {{ management_ip }}
+# VLAN under test: {{ vlan_id }}
+
+Pre-checks
+- Confirm written authorization, maintenance window, scope, and rollback owner.
+- Take a current topology, address plan, and firewall-policy export.
+
+Non-invasive checks
+- Resolve required internal and public DNS names.
+- Test ICMP and TCP connectivity only to approved systems.
+- Verify DHCP, gateway reachability, NTP, logging, monitoring, and backup status.
+- Confirm VLAN {{ vlan_id }} receives the expected subnet and cannot reach restricted zones.
+
+Evidence
+- Record source, target, protocol, port, expected result, actual result, timestamp, and operator.
+- Escalate unexpected exposed ports or cross-segment access; do not continue scanning outside approved scope.

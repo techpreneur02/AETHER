@@ -31,9 +31,13 @@ from backend.models.task import TaskCreate, TaskResponse
 from backend.models.asset import AssetCreate, AssetResponse
 from backend.models.simulation import PacketSimulationRequest, PacketSimulationResponse
 from backend.models.assessment import AssessmentEvaluation, ClientAssessment, DesignRequirements, NetworkDesign
+from backend.models.operations import OperationsRequest, OperationsResult, OperationsTargetStatus
+from backend.models.security_tool import SecurityToolCatalogItem, SecurityToolRequest, SecurityToolResult
 from backend.core.ai import add_ai_design_narrative, answer_helpdesk_query, answer_query
 from backend.core.config_generator import render_config
+from backend.core.operations import list_target_statuses, run_operations_request
 from backend.core.pdf_export import render_as_built_pdf
+from backend.core.security_tools import list_security_tools, run_security_tool
 from backend.core.simulator import simulate_packet
 
 
@@ -89,6 +93,36 @@ def health() -> dict[str, str]:
         "storage": os.getenv("AETHER_STORAGE", "sqlite").lower(),
         "gemini": "configured" if os.getenv("GEMINI_API_KEY") else "unconfigured",
     }
+
+
+@app.get("/operations/targets", response_model=list[OperationsTargetStatus])
+def get_operations_targets(user: StoredUser = Depends(current_user)) -> list[OperationsTargetStatus]:
+    return list_target_statuses()
+
+
+@app.post("/operations/run", response_model=OperationsResult)
+def run_operations(payload: OperationsRequest, user: StoredUser = Depends(admin_user)) -> OperationsResult:
+    try:
+        return run_operations_request(payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
+
+
+@app.get("/security-tools/catalog", response_model=list[SecurityToolCatalogItem])
+def get_security_tools(user: StoredUser = Depends(current_user)) -> list[SecurityToolCatalogItem]:
+    return list_security_tools()
+
+
+@app.post("/security-tools/run", response_model=SecurityToolResult)
+def run_security_tool_action(payload: SecurityToolRequest, user: StoredUser = Depends(admin_user)) -> SecurityToolResult:
+    try:
+        return run_security_tool(payload)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(error)) from error
 
 
 @app.post("/auth/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

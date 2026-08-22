@@ -1,0 +1,16 @@
+# Windows Server baseline preview for {{ hostname }}
+# Review against the server's intended role and approved change record before execution.
+
+$ManagementIp = "{{ management_ip }}"
+$VlanId = {{ vlan_id }}
+
+Set-TimeZone -Id "UTC"
+Enable-NetFirewallRule -DisplayGroup "Windows Defender Firewall"
+Set-NetFirewallProfile -Profile Domain,Private,Public -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow
+
+# Validate the intended adapter and gateway before assigning any address.
+Get-NetAdapter | Sort-Object Status, Name
+Get-NetIPAddress -AddressFamily IPv4
+Test-NetConnection -ComputerName $ManagementIp -InformationLevel Detailed
+
+# Record: management VLAN $VlanId, hostname {{ hostname }}, target {{ management_ip }}

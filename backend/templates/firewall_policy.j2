@@ -1,0 +1,15 @@
+# Vendor-neutral firewall policy baseline for {{ hostname }}
+# Target management address or subnet: {{ management_ip }}
+# VLAN / zone reference: {{ vlan_id }}
+
+1. Default deny all unsolicited inbound traffic; log denied sessions.
+2. Permit established and related return traffic.
+3. Permit administration only from the management network {{ management_ip }}.
+4. Segment VLAN {{ vlan_id }} from guest, IoT, and camera networks; add only documented application flows.
+5. Publish no service without an owner, MFA-compatible access path, expiration date, and tested rollback plan.
+6. Forward security logs to the approved monitoring platform and review policy changes.
+
+Validation:
+- Test a permitted application flow and a denied cross-segment flow.
+- Confirm DNS, NTP, identity, backup, and monitoring dependencies.
+- Export the policy and capture the approved change reference.

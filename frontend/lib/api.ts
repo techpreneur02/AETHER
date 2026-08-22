@@ -76,11 +76,21 @@ export type Topology = {
 };
 
 export type ConfigPreview = {
-  vendor: "cisco_ios" | "mikrotik_routeros" | "fortinet_fortios";
+  vendor: "cisco_ios" | "mikrotik_routeros" | "fortinet_fortios" | "windows_server" | "firewall_policy" | "network_validation";
   template_version: string;
   generated_config: string;
   ai_suggested: boolean;
 };
+
+export type OperationsTarget = "linux_vps" | "windows_server" | "cpanel";
+export type OperationsCommand = "ping" | "traceroute" | "network_summary" | "dns_lookup" | "service_status" | "recent_logs" | "account_summary" | "domains" | "email_accounts";
+export type OperationsTargetStatus = { target: OperationsTarget; available: boolean; detail: string };
+export type OperationsResult = { target: OperationsTarget; command: OperationsCommand; output: string; exit_code: number; duration_ms: number };
+
+export type SecurityToolId = "wireshark" | "nmap" | "kali" | "splunk" | "nessus" | "openvas" | "tcpdump";
+export type SecurityToolAction = "status" | "version" | "launch_profile" | "nmap_host_discovery" | "capture_plan";
+export type SecurityToolCatalogItem = { id: SecurityToolId; name: string; category: string; summary: string; command_name: string | null; installed: boolean; configured: boolean; enabled: boolean; status: string; actions: SecurityToolAction[] };
+export type SecurityToolResult = { tool: SecurityToolId; action: SecurityToolAction; output: string; exit_code: number; duration_ms: number; guarded: boolean };
 
 export type AIQueryResponse = {
   answer: string;
@@ -357,6 +367,36 @@ export async function previewConfig(token: string, projectId: string, payload: {
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error("Unable to generate config preview");
+  return response.json();
+}
+
+export async function listOperationsTargets(token: string): Promise<OperationsTargetStatus[]> {
+  const response = await fetch(`${API_URL}/operations/targets`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error("Unable to load remote operation targets");
+  return response.json();
+}
+
+export async function runOperationsCommand(token: string, payload: { target: OperationsTarget; command: OperationsCommand; argument: string }): Promise<OperationsResult> {
+  const response = await fetch(`${API_URL}/operations/run`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? "Unable to run remote operation");
+  }
+  return response.json();
+}
+
+export async function listSecurityTools(token: string): Promise<SecurityToolCatalogItem[]> {
+  const response = await fetch(`${API_URL}/security-tools/catalog`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error("Unable to load security tools");
+  return response.json();
+}
+
+export async function runSecurityTool(token: string, payload: { tool: SecurityToolId; action: SecurityToolAction; target: string }): Promise<SecurityToolResult> {
+  const response = await fetch(`${API_URL}/security-tools/run`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(detail?.detail ?? "Unable to run security tool action");
+  }
   return response.json();
 }
 

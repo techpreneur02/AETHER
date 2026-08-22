@@ -3,7 +3,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-Vendor = Literal["cisco_ios", "mikrotik_routeros", "fortinet_fortios"]
+Vendor = Literal[
+    "cisco_ios",
+    "mikrotik_routeros",
+    "fortinet_fortios",
+    "windows_server",
+    "firewall_policy",
+    "network_validation",
+]
 
 
 class ConfigPreviewRequest(BaseModel):

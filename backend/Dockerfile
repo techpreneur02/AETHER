@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends libgobject-2.0-0 libpango-1.0-0 libpangoft2-1.0-0 libcairo2 libffi8 \
+	&& apt-get install -y --no-install-recommends libgobject-2.0-0 libpango-1.0-0 libpangoft2-1.0-0 libcairo2 libffi8 openssh-client nmap tcpdump \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& pip install --no-cache-dir -r requirements.txt
 

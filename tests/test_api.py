@@ -19,6 +19,20 @@ def test_health_reports_non_secret_runtime_state() -> None:
     assert response.json()["gemini"] in {"configured", "unconfigured"}
 
 
+def test_remote_operations_refuse_unconfigured_targets_without_executing(monkeypatch) -> None:
+    monkeypatch.delenv("AETHER_OPS_LINUX_SSH_HOST", raising=False)
+    monkeypatch.delenv("AETHER_OPS_LINUX_SSH_USER", raising=False)
+    token = register("operations-admin@example.com")
+
+    targets = client.get("/operations/targets", headers={"Authorization": f"Bearer {token}"})
+    response = client.post("/operations/run", headers={"Authorization": f"Bearer {token}"}, json={"target": "linux_vps", "command": "ping", "argument": "example.com"})
+
+    assert targets.status_code == 200
+    assert next(target for target in targets.json() if target["target"] == "linux_vps")["available"] is False
+    assert response.status_code == 409
+    assert "Set AETHER_OPS_LINUX_SSH_HOST" in response.json()["detail"]
+
+
 def test_helpdesk_requires_authentication() -> None:
     response = client.post("/ai/helpdesk", json={"query": "How do I edit a topology link?"})
 
@@ -152,6 +166,34 @@ def test_network_design_uses_requirements_and_saved_assessment() -> None:
     assert "firewall HA" in response.json()["architecture"][0]
     assert "vlan 50 guest" in response.json()["configurations"]["segmentation"]
     assert loaded.json()["network_design"]["requirements"]["growth_percent"] == 50
+
+
+def test_safe_configuration_profiles_generate_review_artifacts() -> None:
+    token = register("configuration-profiles@example.com")
+    project = client.post("/projects", headers={"Authorization": f"Bearer {token}"}, json={"name": "Configuration Twin"}).json()
+    headers = {"Authorization": f"Bearer {token}"}
+
+    windows = client.post(f"/projects/{project['id']}/config/preview", headers=headers, json={"vendor": "windows_server", "hostname": "dc-01", "management_ip": "10.20.0.10", "vlan_id": 20})
+    firewall = client.post(f"/projects/{project['id']}/config/preview", headers=headers, json={"vendor": "firewall_policy", "hostname": "edge-01", "management_ip": "10.20.0.0/24", "vlan_id": 20})
+    validation = client.post(f"/projects/{project['id']}/config/preview", headers=headers, json={"vendor": "network_validation", "hostname": "hq", "management_ip": "10.20.0.1", "vlan_id": 20})
+
+    assert windows.status_code == 200
+    assert "Set-NetFirewallProfile" in windows.json()["generated_config"]
+    assert "Default deny" in firewall.json()["generated_config"]
+    assert "Non-invasive checks" in validation.json()["generated_config"]
+
+
+def test_security_tool_catalog_and_disabled_scan_gate(monkeypatch) -> None:
+    monkeypatch.delenv("AETHER_SECURITY_TOOLS_ENABLED", raising=False)
+    token = register("security-tools@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    catalog = client.get("/security-tools/catalog", headers=headers)
+    blocked_scan = client.post("/security-tools/run", headers=headers, json={"tool": "nmap", "action": "nmap_host_discovery", "target": "127.0.0.1"})
+
+    assert catalog.status_code == 200
+    assert {item["id"] for item in catalog.json()} >= {"wireshark", "nmap", "kali", "splunk", "nessus"}
+    assert blocked_scan.status_code == 409
 
 
 def test_topology_round_trip_is_scoped_to_project() -> None:
