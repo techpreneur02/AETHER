@@ -19,6 +19,27 @@ def test_health_reports_non_secret_runtime_state() -> None:
     assert response.json()["gemini"] in {"configured", "unconfigured"}
 
 
+def test_helpdesk_requires_authentication() -> None:
+    response = client.post("/ai/helpdesk", json={"query": "How do I edit a topology link?"})
+
+    assert response.status_code == 401
+
+
+def test_helpdesk_answers_from_product_guide(monkeypatch) -> None:
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    token = register("helpdesk@example.com")
+    response = client.post(
+        "/ai/helpdesk",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"query": "How do I connect devices and assign ports on the topology?"},
+    )
+
+    assert response.status_code == 200
+    assert "Select a wire" in response.json()["answer"]
+    assert "Build and edit the topology" in response.json()["sources"]
+    assert response.json()["ai_suggested"] is False
+
+
 def test_viewer_role_guard_rejects_writes() -> None:
     token = register("viewer@example.com")
     user = store.find_user_by_email("viewer@example.com")

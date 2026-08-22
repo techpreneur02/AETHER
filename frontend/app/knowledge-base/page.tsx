@@ -1,17 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  Bot,
   BookOpen,
   CheckCircle2,
   ChevronRight,
+  LoaderCircle,
+  MessageCircleQuestion,
   Search,
+  Send,
   ShieldCheck,
   Sparkles,
   UserRound,
   Wrench,
+  X,
 } from "lucide-react";
+import { queryHelpdesk } from "../../lib/api";
 import "../globals.css";
 
 type Guide = "user" | "admin";
@@ -23,6 +29,18 @@ type GuideSection = {
   steps: string[];
   note?: string;
 };
+
+type HelpdeskMessage = {
+  role: "assistant" | "user";
+  text: string;
+  sources?: string[];
+};
+
+const helpdeskPrompts = [
+  "How do I run an infrastructure audit?",
+  "How do I connect devices and assign ports?",
+  "How do I test reachability?",
+];
 
 const userGuide: GuideSection[] = [
   {
@@ -195,6 +213,12 @@ const adminGuide: GuideSection[] = [
 export default function KnowledgeBasePage() {
   const [guide, setGuide] = useState<Guide>("user");
   const [query, setQuery] = useState("");
+  const [helpdeskOpen, setHelpdeskOpen] = useState(false);
+  const [helpdeskQuery, setHelpdeskQuery] = useState("");
+  const [helpdeskLoading, setHelpdeskLoading] = useState(false);
+  const [helpdeskMessages, setHelpdeskMessages] = useState<HelpdeskMessage[]>([
+    { role: "assistant", text: "Ask me how to use AETHER-IT. I answer from the user and administrator guides." },
+  ]);
   const sections = guide === "user" ? userGuide : adminGuide;
   const visibleSections = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -205,6 +229,42 @@ export default function KnowledgeBasePage() {
         .some((value) => value?.toLowerCase().includes(normalized)),
     );
   }, [query, sections]);
+
+  async function askHelpdesk(question: string) {
+    const trimmed = question.trim();
+    if (!trimmed || helpdeskLoading) return;
+    setHelpdeskOpen(true);
+    setHelpdeskQuery("");
+    setHelpdeskMessages((messages) => [...messages, { role: "user", text: trimmed }]);
+    setHelpdeskLoading(true);
+    try {
+      const token = localStorage.getItem("aether_access_token");
+      if (!token) throw new Error("AUTH_REQUIRED");
+      const response = await queryHelpdesk(token, trimmed);
+      setHelpdeskMessages((messages) => [...messages, { role: "assistant", text: response.answer, sources: response.sources }]);
+    } catch (error) {
+      const message = error instanceof Error && error.message === "AUTH_REQUIRED"
+        ? "Your session has expired. Sign in again to use the AI helpdesk."
+        : "The helpdesk could not answer right now. You can still search and browse the guides on this page.";
+      setHelpdeskMessages((messages) => [...messages, { role: "assistant", text: message }]);
+    } finally {
+      setHelpdeskLoading(false);
+    }
+  }
+
+  function submitHelpdesk(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void askHelpdesk(helpdeskQuery);
+  }
+
+  function openSource(source: string) {
+    const userSection = userGuide.find((section) => section.title === source);
+    const adminSection = adminGuide.find((section) => section.title === source);
+    const section = userSection ?? adminSection;
+    if (!section) return;
+    setGuide(userSection ? "user" : "admin");
+    window.setTimeout(() => document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+  }
 
   return (
     <main className="knowledge-shell">
@@ -237,6 +297,30 @@ export default function KnowledgeBasePage() {
           )) : <div className="knowledge-empty"><Search size={22} /><b>No matching guidance</b><span>Try a device, workflow, maintenance, or troubleshooting term.</span></div>}
         </article>
       </div>
+      {helpdeskOpen && (
+        <aside className="helpdesk-panel" aria-label="AI knowledge base helpdesk">
+          <header className="helpdesk-header">
+            <div className="helpdesk-identity"><span><Bot size={18} /></span><div><b>AI Helpdesk</b><small>Guide-grounded assistance</small></div></div>
+            <button onClick={() => setHelpdeskOpen(false)} aria-label="Close AI helpdesk" title="Close helpdesk"><X size={18} /></button>
+          </header>
+          <div className="helpdesk-messages" aria-live="polite">
+            {helpdeskMessages.map((message, index) => (
+              <div className={`helpdesk-message ${message.role}`} key={`${message.role}-${index}`}>
+                <span>{message.role === "assistant" ? "AETHER AI" : "YOU"}</span>
+                <p>{message.text}</p>
+                {!!message.sources?.length && <div className="helpdesk-sources">{message.sources.map((source) => <button key={source} onClick={() => openSource(source)}>{source}</button>)}</div>}
+              </div>
+            ))}
+            {helpdeskLoading && <div className="helpdesk-thinking"><LoaderCircle size={15} /> Checking the guide...</div>}
+          </div>
+          {helpdeskMessages.length === 1 && <div className="helpdesk-prompts">{helpdeskPrompts.map((prompt) => <button key={prompt} onClick={() => void askHelpdesk(prompt)}>{prompt}</button>)}</div>}
+          <form className="helpdesk-form" onSubmit={submitHelpdesk}>
+            <textarea value={helpdeskQuery} onChange={(event) => setHelpdeskQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Ask how to use AETHER-IT..." aria-label="Question for AI helpdesk" rows={2} maxLength={1000} />
+            <button type="submit" disabled={!helpdeskQuery.trim() || helpdeskLoading} aria-label="Send question" title="Send question"><Send size={17} /></button>
+          </form>
+        </aside>
+      )}
+      {!helpdeskOpen && <button className="helpdesk-launcher" onClick={() => setHelpdeskOpen(true)} aria-label="Open AI helpdesk"><MessageCircleQuestion size={21} /><span>AI Helpdesk</span></button>}
     </main>
   );
 }

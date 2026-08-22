@@ -43,6 +43,13 @@ export type AIQueryResponse = {
   actions: { id: string; label: string; description: string }[];
 };
 
+export type HelpdeskResponse = {
+  answer: string;
+  sources: string[];
+  ai_suggested: boolean;
+  cached: boolean;
+};
+
 export type PacketSimulation = {
   reachable: boolean;
   disposition: "delivered" | "blocked" | "unreachable";
@@ -288,6 +295,19 @@ export async function queryProjectAI(token: string, projectId: string, query: st
     body: JSON.stringify({ query }),
   });
   if (!response.ok) throw new Error("Unable to query project AI");
+  return response.json();
+}
+
+export async function queryHelpdesk(token: string, query: string): Promise<HelpdeskResponse> {
+  const response = await fetch(`${API_URL}/ai/helpdesk`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => null);
+    throw new Error(response.status === 401 ? "AUTH_REQUIRED" : detail?.detail ?? "Helpdesk is unavailable");
+  }
   return response.json();
 }
 

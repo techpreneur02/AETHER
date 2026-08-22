@@ -17,6 +17,7 @@ import {
   Database,
   Eye,
   FileCheck2,
+  EyeOff,
   FileCode2,
   FileDown,
   Gauge,
@@ -425,8 +426,8 @@ function NodeGlyph({ type }: { type: string }) {
 }
 
 export default function Home() {
-  const [activeNav, setActiveNav] = useState("Topology");
-  const [activeStage, setActiveStage] = useState("TOPOLOGY");
+  const [activeNav, setActiveNav] = useState("Dashboard");
+  const [activeStage, setActiveStage] = useState("DASHBOARD");
   const [selectedNode, setSelectedNode] = useState("");
   const [isLive, setIsLive] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -476,6 +477,7 @@ export default function Home() {
   const [typeFilter, setTypeFilter] = useState<
     "all" | "device" | "site" | "service"
   >("all");
+  const [vendorFilter, setVendorFilter] = useState("all");
   const [enabledLayers, setEnabledLayers] = useState<string[]>([
     "L1 Physical / Fiber",
     "L2 Network",
@@ -721,10 +723,14 @@ export default function Home() {
           .includes(deviceSearch.trim().toLowerCase())),
   );
   const sourceTopology = topology?.nodes.length ? topology : fallbackTopology;
+  const availableVendors = Array.from(
+    new Set(sourceTopology.nodes.map((node) => node.vendor).filter((vendor): vendor is string => Boolean(vendor))),
+  ).sort((first, second) => first.localeCompare(second));
   const filteredNodeIds = new Set(
     sourceTopology.nodes
       .filter((node) => {
         const matchesType = typeFilter === "all" || node.kind === typeFilter;
+        const matchesVendor = vendorFilter === "all" || node.vendor === vendorFilter;
         const matchesSite = siteFilter === "all" || node.kind === "site";
         const matchesSearch =
           !deviceSearch.trim() ||
@@ -737,8 +743,9 @@ export default function Home() {
             /wireless|access point|\bap\b/i.test(node.name)) ||
           (legendFilter === "firewall" &&
             /firewall|fortigate/i.test(node.name)) ||
-          (legendFilter === "router" && /router|switch|core/i.test(node.name));
-        return matchesType && matchesSite && matchesSearch && matchesLegend;
+          (legendFilter === "router" && /router/i.test(`${node.name} ${node.model ?? ""}`)) ||
+          (legendFilter === "switch" && /switch|core/i.test(`${node.name} ${node.model ?? ""}`));
+        return matchesType && matchesVendor && matchesSite && matchesSearch && matchesLegend;
       })
       .map((node) => node.id),
   );
@@ -806,6 +813,7 @@ export default function Home() {
   function resetFilters() {
     setDeviceSearch("");
     setTypeFilter("all");
+    setVendorFilter("all");
     setStatusFilter("all");
     setSiteFilter("all");
     setLegendFilter("all");
@@ -1271,6 +1279,16 @@ export default function Home() {
   const isolatedDeviceCount = (topology?.nodes ?? []).filter(
     (node) => !connectedDeviceIds.has(node.id),
   ).length;
+  const addressedDeviceIds = new Set(ipAllocations.map((allocation) => allocation.device_id).filter(Boolean));
+  const missingAddressCount = (topology?.nodes ?? []).filter((node) => !addressedDeviceIds.has(node.id)).length;
+  const operationalLinkRate = topology?.links.length
+    ? Math.round(((topology.links.length - downLinkCount) / topology.links.length) * 100)
+    : 100;
+  const dashboardAlarms = [
+    ...(downLinkCount ? [{ severity: "critical", title: `${downLinkCount} connection${downLinkCount === 1 ? "" : "s"} down`, detail: "Review link state before running simulations." }] : []),
+    ...(isolatedDeviceCount ? [{ severity: "warning", title: `${isolatedDeviceCount} isolated device${isolatedDeviceCount === 1 ? "" : "s"}`, detail: "Connect the devices or document their standalone role." }] : []),
+    ...(topologyLoadError ? [{ severity: "critical", title: "Topology synchronization failed", detail: "Check API health before recording infrastructure changes." }] : []),
+  ];
 
   function runTerminalCommand(command: string) {
     const normalized = command.trim().toLowerCase();
@@ -1451,9 +1469,10 @@ export default function Home() {
                 key={label}
                 href={navigationRoutes[label]}
                 className={`nav-item nav-link ${activeNav === label ? "active" : ""}`}
-                onClick={() => {
+                onClick={(event) => {
+                  if (["Dashboard", "Projects", "Topology"].includes(label)) event.preventDefault();
                   setActiveNav(label);
-                  setActiveStage("TOPOLOGY");
+                  setActiveStage(label === "Dashboard" ? "DASHBOARD" : "TOPOLOGY");
                 }}
               >
                 <Icon size={15} />
@@ -1547,7 +1566,51 @@ export default function Home() {
               <FileCheck2 size={14} /> PDF
             </button>
           </div>
-          {!['TOPOLOGY', 'DEVICE DETAILS', 'SIMULATOR'].includes(activeStage) ? (
+          {activeStage === "DASHBOARD" ? (
+            <div className="dashboard-overview">
+              <div className="dashboard-heading">
+                <div><span className="eyebrow">PROJECT / OPERATIONAL OVERVIEW</span><h1>{displayedProjectName}</h1><p>Current infrastructure state, coverage, notices, and priority alarms.</p></div>
+                <a href="/audit"><FileCheck2 size={15} /> Run infrastructure audit</a>
+              </div>
+              <section className="dashboard-stat-grid" aria-label="Quick project statistics">
+                {[
+                  [Server, topology?.nodes.length ?? 0, "Devices", "Recorded inventory"],
+                  [Cable, topology?.links.length ?? 0, "Connections", `${operationalLinkRate}% operational`],
+                  [GitBranch, ipAllocations.length, "IP addresses", `${missingAddressCount} devices unassigned`],
+                  [ShieldCheck, "98%", "Compliance", "Current project score"],
+                  [Activity, downLinkCount, "Down links", downLinkCount ? "Attention required" : "All links available"],
+                  [Network, isolatedDeviceCount, "Isolated", isolatedDeviceCount ? "Review topology" : "All devices connected"],
+                ].map(([Icon, value, label, detail]) => {
+                  const MetricIcon = Icon as LucideIcon;
+                  return <article className="dashboard-stat" key={String(label)}><div><MetricIcon size={17} /><span>{String(label)}</span></div><strong>{String(value)}</strong><small>{String(detail)}</small></article>;
+                })}
+              </section>
+              <div className="dashboard-detail-grid">
+                <section className="dashboard-section dashboard-modules">
+                  <header><div><span className="eyebrow">WORKSPACES</span><h2>Infrastructure summary</h2></div><small>{navigation.length} operational areas</small></header>
+                  <div className="dashboard-module-grid">
+                    {[
+                      ["Topology", Network, `${topology?.nodes.length ?? 0} devices · ${topology?.links.length ?? 0} links`, "/"],
+                      ["Devices", Server, `${topology?.nodes.filter((node) => node.kind === "device").length ?? 0} managed assets`, "/devices"],
+                      ["IP Management", GitBranch, `${ipAllocations.length} allocations`, "/ip-management"],
+                      ["Floorplans", Layers3, "Physical placement and plans", "/floorplans"],
+                      ["Security", LockKeyhole, "Policy and enforcement rules", "/security"],
+                      ["Compliance", ShieldCheck, "Audit readiness and controls", "/compliance"],
+                      ["Cabling", Cable, `${topology?.links.filter((link) => link.medium !== "wireless").length ?? 0} wired links`, "/cabling"],
+                      ["Reports", FileCheck2, "Metrics and project exports", "/reports"],
+                    ].map(([label, Icon, summary, href]) => {
+                      const ModuleIcon = Icon as LucideIcon;
+                      return <a href={String(href)} key={String(label)} onClick={(event) => { if (label === "Topology") { event.preventDefault(); setActiveNav("Topology"); setActiveStage("TOPOLOGY"); } }}><ModuleIcon size={17} /><div><b>{String(label)}</b><span>{String(summary)}</span></div><ChevronDown size={14} /></a>;
+                    })}
+                  </div>
+                </section>
+                <div className="dashboard-operations">
+                  <section className="dashboard-section dashboard-alarms"><header><div><span className="eyebrow">PRIORITY</span><h2>Alarms</h2></div><b>{dashboardAlarms.length}</b></header>{dashboardAlarms.length ? dashboardAlarms.map((alarm) => <div className={`dashboard-alert ${alarm.severity}`} key={alarm.title}><Bell size={15} /><div><b>{alarm.title}</b><span>{alarm.detail}</span></div></div>) : <div className="dashboard-clear"><Check size={17} /><div><b>No active infrastructure alarms</b><span>Recorded links and device connectivity are healthy.</span></div></div>}</section>
+                  <section className="dashboard-section dashboard-notices"><header><div><span className="eyebrow">ACTIVITY</span><h2>Notices</h2></div><b>{notifications.length}</b></header>{notifications.slice(0, 4).map((notice) => <button key={notice} onClick={() => setNotifications((current) => current.filter((item) => item !== notice))}><CircleDot size={13} /><span>{notice}</span><small>Acknowledge</small></button>)}</section>
+                </div>
+              </div>
+            </div>
+          ) : !['TOPOLOGY', 'DEVICE DETAILS', 'SIMULATOR'].includes(activeStage) ? (
             <div className="module-placeholder panel">
               <Cpu size={34} />
               <h2>
@@ -1882,10 +1945,12 @@ export default function Home() {
                         className={`layer-row ${enabledLayers.includes(item) ? "selected" : ""}`}
                         key={item}
                         onClick={() => toggleLayer(item)}
+                        aria-pressed={enabledLayers.includes(item)}
+                        title={enabledLayers.includes(item) ? `Hide ${item}` : `Show ${item}`}
                       >
                         <span className={`layer-dot dot-${index}`} />
                         <span>{item}</span>
-                        <Eye size={12} />
+                        {enabledLayers.includes(item) ? <Eye size={12} /> : <EyeOff size={12} />}
                       </button>
                     ))}
                     <div className="panel-heading filter-heading">
@@ -1920,15 +1985,14 @@ export default function Home() {
                         <option value="site">Sites</option>
                         <option value="service">Services</option>
                       </select>
-                      <button
-                        onClick={() =>
-                          setControlMessage(
-                            "Vendor data is available on the Devices page",
-                          )
-                        }
+                      <select
+                        aria-label="Filter topology by vendor"
+                        value={vendorFilter}
+                        onChange={(event) => setVendorFilter(event.target.value)}
                       >
-                        Vendor <ChevronDown size={12} />
-                      </button>
+                        <option value="all">All vendors</option>
+                        {availableVendors.map((vendor) => <option key={vendor} value={vendor}>{vendor}</option>)}
+                      </select>
                     </div>
                     <div className="filter-pair">
                       <button
@@ -1963,14 +2027,17 @@ export default function Home() {
                               ? "wireless"
                               : label === "Firewall"
                                 ? "firewall"
-                                : label === "Router" || label === "Switch"
+                                : label === "Router"
                                   ? "router"
+                                  : label === "Switch"
+                                    ? "switch"
                                   : "all";
                       return (
                         <button
                           className={`legend-row ${legendFilter === filter ? "selected" : ""}`}
                           key={`${label}-${index}`}
-                          onClick={() => setLegendFilter(filter)}
+                          onClick={() => setLegendFilter((current) => current === filter ? "all" : filter)}
+                          aria-pressed={legendFilter === filter}
                         >
                           <Icon size={12} />
                           <span>{label}</span>

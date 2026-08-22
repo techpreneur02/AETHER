@@ -22,14 +22,14 @@ from backend.models.position import PositionUpdate
 from backend.models.import_job import ImportSummary
 from backend.models.export import ProjectExport
 from backend.models.config import ConfigPreviewRequest, ConfigPreviewResponse
-from backend.models.ai import AIQueryRequest, AIQueryResponse
+from backend.models.ai import AIQueryRequest, AIQueryResponse, HelpdeskResponse
 from backend.models.membership import MembershipResponse, RoleUpdate
 from backend.models.ip_allocation import IPAllocationCreate, IPAllocationResponse
 from backend.models.security_rule import SecurityRuleCreate, SecurityRuleResponse
 from backend.models.task import TaskCreate, TaskResponse
 from backend.models.asset import AssetCreate, AssetResponse
 from backend.models.simulation import PacketSimulationRequest, PacketSimulationResponse
-from backend.core.ai import answer_query
+from backend.core.ai import answer_helpdesk_query, answer_query
 from backend.core.config_generator import render_config
 from backend.core.pdf_export import render_as_built_pdf
 from backend.core.simulator import simulate_packet
@@ -535,6 +535,11 @@ async def query_project_ai(project_id: str, payload: AIQueryRequest, user: Store
         len(store.list_ip_allocations(project_id, user.organization_id)),
         len(store.list_security_rules(project_id, user.organization_id)),
     )
+
+
+@app.post("/ai/helpdesk", response_model=HelpdeskResponse)
+async def query_helpdesk(payload: AIQueryRequest, user: StoredUser = Depends(current_user)) -> HelpdeskResponse:
+    return await answer_helpdesk_query(payload.query)
 
 
 @app.post("/projects/{project_id}/floorplan", response_model=ProjectResponse)

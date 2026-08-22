@@ -7,6 +7,15 @@ class AIQueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=1000)
 
 
+class HelpdeskResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    answer: str
+    sources: list[str] = Field(default_factory=list)
+    ai_suggested: bool
+    cached: bool = False
+
+
 class AIAction(BaseModel):
     id: str
     label: str
