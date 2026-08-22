@@ -27,7 +27,6 @@ import {
   Menu,
   Network,
   PanelRight,
-  Play,
   Plus,
   Router,
   Search,
@@ -487,7 +486,6 @@ export default function Home() {
   const [alertTab, setAlertTab] = useState<"alerts" | "tasks" | "logs">(
     "alerts",
   );
-  const [cameraPlaying, setCameraPlaying] = useState(false);
   const [showTerminal, setShowTerminal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -1310,6 +1308,12 @@ export default function Home() {
             >
               <Network size={14} /> TOPOLOGY
             </button>
+            <button
+              className={activeStage === "DEVICE DETAILS" ? "selected" : ""}
+              onClick={() => setActiveStage("DEVICE DETAILS")}
+            >
+              <PanelRight size={14} /> DEVICE DETAILS
+            </button>
             <a className="stage-link" href="/floorplans">
               <Layers3 size={14} /> FLOORPLANS
             </a>
@@ -1341,7 +1345,7 @@ export default function Home() {
               <FileCheck2 size={14} /> PDF
             </button>
           </div>
-          {activeStage !== "TOPOLOGY" ? (
+          {!['TOPOLOGY', 'DEVICE DETAILS'].includes(activeStage) ? (
             <div className="module-placeholder panel">
               <Cpu size={34} />
               <h2>
@@ -1365,20 +1369,37 @@ export default function Home() {
             <>
               <div className="stage-toolbar">
                 <div>
-                  <span className="eyebrow">TOPOLOGY / LIVE MAP</span>
-                  <h1>Infrastructure topology</h1>
+                  <span className="eyebrow">
+                    {activeStage === "TOPOLOGY" ? "TOPOLOGY / LIVE MAP" : "ASSET / DEVICE DETAILS"}
+                  </span>
+                  <h1>{activeStage === "TOPOLOGY" ? "Infrastructure topology" : selectedDevice?.name ?? "Device details"}</h1>
                   <span className="topology-summary">
-                    {topologyLoadError
+                    {activeStage === "DEVICE DETAILS"
+                      ? "Metadata, ports, addressing, and connection assignment"
+                      : topologyLoadError
                       ? "Topology unavailable"
                       : `${topology?.nodes.length ?? 0} devices · ${topology?.links.length ?? 0} links`}
                   </span>
                 </div>
                 <div className="toolbar-actions">
-                  {!topology?.nodes.length && (
+                  {activeStage === "TOPOLOGY" && !topology?.nodes.length && (
                     <button onClick={loadDemoTopology}>
                       <Database size={14} /> Load demo
                     </button>
                   )}
+                  {activeStage === "DEVICE DETAILS" ? (
+                    <>
+                      <select aria-label="Selected device" value={selectedNode} onChange={(event) => setSelectedNode(event.target.value)}>
+                        {(topology?.nodes ?? []).map((node) => (
+                          <option key={node.id} value={node.id}>{node.name}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => setActiveStage("TOPOLOGY")}>
+                        <Network size={14} /> Back to topology
+                      </button>
+                    </>
+                  ) : (
+                    <>
                   <button onClick={() => setIsLive(!isLive)}>
                     <CircleDot size={14} /> {isLive ? "Live" : "Paused"}
                   </button>
@@ -1419,6 +1440,8 @@ export default function Home() {
                   <button onClick={resetView}>
                     <Eye size={14} /> View
                   </button>
+                    </>
+                  )}
                 </div>
               </div>
               {showProjectForm && (
@@ -1556,7 +1579,7 @@ export default function Home() {
                   }}>Close</button>
                 </div>
               )}
-              <div className="content-grid">
+              <div className={`content-grid ${activeStage === "DEVICE DETAILS" ? "device-details-view" : "topology-view"}`}>
                 <div className="left-stack">
                   <div className="layers-panel panel">
                     <div className="panel-heading">
@@ -1677,7 +1700,10 @@ export default function Home() {
                   <TopologyFlow
                     topology={filteredTopology}
                     selectedNodeId={selectedNode}
-                    onNodeClick={setSelectedNode}
+                    onNodeClick={(nodeId) => {
+                      setSelectedNode(nodeId);
+                      setActiveStage("DEVICE DETAILS");
+                    }}
                     onConnect={connectTopologyNodes}
                     onNodeDragStop={persistNodePosition}
                     onEdgeClick={selectTopologyEdge}
@@ -1693,7 +1719,9 @@ export default function Home() {
                           ?.label ?? "Select a device"}
                       </h2>
                     </div>
-                    <X size={15} />
+                    <button className="panel-icon" title="Back to topology" onClick={() => setActiveStage("TOPOLOGY")}>
+                      <X size={15} />
+                    </button>
                   </div>
                   <div className="device-preview">
                     <div className="rack-icon">
@@ -1952,7 +1980,7 @@ export default function Home() {
                   </div>
                 </aside>
               </div>
-              <div className="bottom-strip">
+              {activeStage === "TOPOLOGY" && <div className="bottom-strip topology-alerts">
                 <div className="alert-panel panel">
                   <div className="strip-tabs">
                     <button className={alertTab === "alerts" ? "active" : ""} onClick={() => setAlertTab("alerts")}>ALERTS</button>
@@ -1984,35 +2012,7 @@ export default function Home() {
                   {alertTab === "tasks" && <div className="alert-row"><span className="severity warning">TASKS</span><span>{topology?.nodes.length ?? 0} assets</span><b>Review project work queue</b></div>}
                   {alertTab === "logs" && <div className="alert-row"><span className="severity info">LOG</span><span>Live</span><b>Topology synchronized with project API</b></div>}
                 </div>
-                <div className="floorplan panel">
-                  <div className="section-line">
-                    <span className="eyebrow">FLOORPLAN: 1ST FLOOR</span>
-                    <span className="tiny-badge">2D</span>
-                  </div>
-                  <div className="floor-grid">
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                  </div>
-                </div>
-                <div className="camera panel">
-                  <div className="section-line">
-                    <span className="eyebrow">CAMERA VIEW: LOBBY - CAM 01</span>
-                    <span className="online-dot" />
-                  </div>
-                  <div className="camera-image">
-                    <Camera size={25} />
-                    <span>{cameraPlaying ? "Live feed active" : "Live feed paused"}</span>
-                    <button onClick={() => setCameraPlaying((current) => !current)} aria-label={cameraPlaying ? "Pause camera feed" : "Play camera feed"}>
-                      <Play size={13} />
-                    </button>
-                  </div>
-                </div>
-              </div>
+              </div>}
             </>
           )}
           {controlMessage && (
