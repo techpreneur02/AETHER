@@ -580,10 +580,9 @@ export default function Home() {
     { length: Math.max(selectedDevice?.port_count ?? 4, 4) },
     (_, index) => `Gi1/0/${index + 1}`,
   );
-  const selectedPortInventory =
-    selectedDevicePorts.length > 0
-      ? selectedDevicePorts
-      : portCatalog;
+  const selectedPortInventory = Array.from(
+    new Set([...portCatalog, ...selectedDevicePorts]),
+  );
   const availableDevicePorts = portCatalog.filter(
     (port) => !selectedDevicePorts.includes(port),
   );
